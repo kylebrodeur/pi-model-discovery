@@ -5,11 +5,11 @@ const pi_coding_agent_1 = require("@earendil-works/pi-coding-agent");
 const node_fs_1 = require("node:fs");
 const node_path_1 = require("node:path");
 const config_1 = require("./config");
-const discover_1 = require("./discover");
+const sync_1 = require("./sync");
 const registerCommands = (pi, state, actions) => {
     const SUBCOMMAND_DETAILS = [
         { name: 'status', desc: 'Show current discovery status' },
-        { name: 'discover', desc: 'Discover available models' },
+        { name: 'sync', desc: 'Sync Ollama models into pi configuration' },
         { name: 'profile', desc: 'Switch to a different discovery profile' },
         { name: 'widget', desc: 'Toggle the discovery status widget' },
         { name: 'debug', desc: 'Toggle discovery debug logging' },
@@ -43,20 +43,21 @@ const registerCommands = (pi, state, actions) => {
         ctx.ui.notify(lines.join('\n'), 'info');
         actions.updateStatus(ctx);
     };
-    const handleDiscover = async (args, ctx) => {
+    const handleSync = async (args, ctx) => {
         if (args.length > 0) {
-            ctx.ui.notify('Usage: /discovery discover (no arguments)', 'error');
+            ctx.ui.notify('Usage: /discovery sync (no arguments)', 'error');
             return;
         }
-        const models = (0, discover_1.discoverModels)(ctx);
-        const lines = [
-            'Discovered Models:',
-            ...Object.entries(models).map(([provider, modelList]) => {
-                const modelNames = modelList.map((m) => m.id).join(', ');
-                return `  ${provider}: ${modelNames}`;
-            }),
-        ];
-        ctx.ui.notify(lines.join('\n'), 'info');
+        const result = await (0, sync_1.performSync)(pi, {
+            syncOnStartup: false,
+            addToScope: state.currentConfig.addToScope ?? true,
+        });
+        if (result.success) {
+            ctx.ui.notify(`[Discovery] ${result.message}`, 'info');
+        }
+        else {
+            ctx.ui.notify(`[Discovery] Sync failed: ${result.message}`, 'error');
+        }
     };
     const handleProfile = async (args, ctx) => {
         if (args.length > 1) {
@@ -129,6 +130,8 @@ const registerCommands = (pi, state, actions) => {
         const defaultConfig = {
             defaultProfile: 'auto',
             debug: false,
+            syncOnStartup: true,
+            addToScope: true,
             profiles: {
                 auto: {
                     high: {
@@ -225,8 +228,8 @@ const registerCommands = (pi, state, actions) => {
                 case 'status':
                     await handleStatus(subArgs, ctx);
                     break;
-                case 'discover':
-                    await handleDiscover(subArgs, ctx);
+                case 'sync':
+                    await handleSync(subArgs, ctx);
                     break;
                 case 'help':
                 case '?':
@@ -237,7 +240,7 @@ const registerCommands = (pi, state, actions) => {
                     ctx.ui.notify([
                         'Discovery Subcommands:',
                         '  status                      Show current status, profile, and widget state.',
-                        '  discover                    Discover available models.',
+                        '  sync                        Sync Ollama models into pi configuration.',
                         '  profile [name]              Switch to a profile. Lists available if no name.',
                         '  widget <on|off|toggle>      Control the persistent status widget visibility.',
                         '  debug <on|off|toggle>       Control discovery debug logging.',

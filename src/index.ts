@@ -13,6 +13,7 @@ import {
 import { isModelDiscoveryState, buildPersistedState } from './state';
 import { updateStatus } from './ui';
 import { registerCommands } from './commands';
+import { performSync } from './sync';
 
 const modelDiscoveryExtension = (pi: ExtensionAPI) => {
   let currentConfig: ModelDiscoveryConfig = FALLBACK_CONFIG;
@@ -140,6 +141,24 @@ const modelDiscoveryExtension = (pi: ExtensionAPI) => {
 
   pi.on('session_start', async (_event, ctx) => {
     await restoreStateFromSession(ctx);
+
+    if (currentConfig.syncOnStartup) {
+      const result = await performSync(pi, {
+        syncOnStartup: true,
+        addToScope: currentConfig.addToScope ?? true,
+      });
+      if (result.success && result.added.length > 0) {
+        ctx.ui.notify(
+          `[Discovery] Synced ${result.added.length} new Ollama model(s). Run /reload to use them.`,
+          'info',
+        );
+      } else if (!result.success) {
+        ctx.ui.notify(
+          `[Discovery] Ollama sync failed: ${result.message}`,
+          'warning',
+        );
+      }
+    }
 
     if (debugEnabled) {
       ctx.ui.notify(

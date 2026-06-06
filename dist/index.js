@@ -4,6 +4,7 @@ const config_1 = require("./config");
 const state_1 = require("./state");
 const ui_1 = require("./ui");
 const commands_1 = require("./commands");
+const sync_1 = require("./sync");
 const modelDiscoveryExtension = (pi) => {
     let currentConfig = config_1.FALLBACK_CONFIG;
     let currentCwd = process.cwd();
@@ -90,6 +91,18 @@ const modelDiscoveryExtension = (pi) => {
     }, actions);
     pi.on('session_start', async (_event, ctx) => {
         await restoreStateFromSession(ctx);
+        if (currentConfig.syncOnStartup) {
+            const result = await (0, sync_1.performSync)(pi, {
+                syncOnStartup: true,
+                addToScope: currentConfig.addToScope ?? true,
+            });
+            if (result.success && result.added.length > 0) {
+                ctx.ui.notify(`[Discovery] Synced ${result.added.length} new Ollama model(s). Run /reload to use them.`, 'info');
+            }
+            else if (!result.success) {
+                ctx.ui.notify(`[Discovery] Ollama sync failed: ${result.message}`, 'warning');
+            }
+        }
         if (debugEnabled) {
             ctx.ui.notify(`Discovery initialized with profiles: ${Object.keys(currentConfig.profiles).join(', ')}`, 'info');
         }

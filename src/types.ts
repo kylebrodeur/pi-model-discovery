@@ -17,6 +17,8 @@ export interface ModelDiscoveryConfig {
   defaultProfile?: string;
   debug?: boolean;
   profiles: Record<string, ModelProfile>;
+  syncOnStartup?: boolean;
+  addToScope?: boolean;
 }
 
 export interface ModelDiscoveryState {

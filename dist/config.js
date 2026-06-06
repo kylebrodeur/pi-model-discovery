@@ -8,6 +8,8 @@ exports.MODEL_TIERS = ['high', 'medium', 'low'];
 exports.FALLBACK_CONFIG = {
     defaultProfile: 'auto',
     debug: false,
+    syncOnStartup: true,
+    addToScope: true,
     profiles: {
         auto: {
             high: { model: 'openai/gpt-4-turbo-preview', thinking: 'off' },
@@ -77,6 +79,8 @@ const mergeConfig = (base, override) => {
     return {
         defaultProfile: override.defaultProfile ?? base.defaultProfile,
         debug: override.debug ?? base.debug,
+        syncOnStartup: override.syncOnStartup ?? base.syncOnStartup,
+        addToScope: override.addToScope ?? base.addToScope,
         profiles: mergedProfiles,
     };
 };
@@ -153,6 +157,8 @@ const normalizeConfig = (raw) => {
         config: {
             defaultProfile,
             debug: typeof raw.debug === 'boolean' ? raw.debug : false,
+            syncOnStartup: typeof raw.syncOnStartup === 'boolean' ? raw.syncOnStartup : true,
+            addToScope: typeof raw.addToScope === 'boolean' ? raw.addToScope : true,
             profiles: normalizedProfiles,
         },
         warnings,
