@@ -1,0 +1,30 @@
+{
+  "name": "pi-model-discovery",
+  "version": "0.1.0",
+  "description": "A pi extension for discovering and managing models.",
+  "main": "dist/index.js",
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "keywords": [
+    "pi-extension"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "latest",
+    "@earendil-works/pi-tui": "latest",
+    "@earendil-works/pi-agent-core": "latest",
+    "@earendil-works/pi-ai": "latest",
+    "typebox": "latest"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

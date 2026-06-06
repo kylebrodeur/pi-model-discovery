@@ -1,0 +1,261 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.registerCommands = void 0;
+const pi_coding_agent_1 = require("@earendil-works/pi-coding-agent");
+const node_fs_1 = require("node:fs");
+const node_path_1 = require("node:path");
+const config_1 = require("./config");
+const discover_1 = require("./discover");
+const registerCommands = (pi, state, actions) => {
+    const SUBCOMMAND_DETAILS = [
+        { name: 'status', desc: 'Show current discovery status' },
+        { name: 'discover', desc: 'Discover available models' },
+        { name: 'profile', desc: 'Switch to a different discovery profile' },
+        { name: 'widget', desc: 'Toggle the discovery status widget' },
+        { name: 'debug', desc: 'Toggle discovery debug logging' },
+        { name: 'reload', desc: 'Reload the model discovery configuration' },
+        { name: 'init', desc: 'Create a default model-discovery.json config file' },
+        { name: 'help', desc: 'Show usage help for subcommands' },
+    ];
+    const getSubcommandCompletions = (prefix) => {
+        const items = SUBCOMMAND_DETAILS.filter((s) => s.name.startsWith(prefix)).map((s) => ({
+            value: s.name,
+            label: s.name,
+            description: s.desc,
+        }));
+        return items.length > 0 ? items : null;
+    };
+    const handleStatus = async (args, ctx) => {
+        if (args.length > 0) {
+            ctx.ui.notify('Usage: /discovery status (no arguments)', 'error');
+            return;
+        }
+        const names = (0, config_1.profileNames)(state.currentConfig).join(', ');
+        const lines = [
+            'Model Discovery Status:',
+            `Enabled: ${state.enabled ? 'yes' : 'off'}`,
+            `Selected profile: ${state.selectedProfile}`,
+            `Widget: ${state.widgetEnabled ? 'on' : 'off'}`,
+            `Default profile: ${(0, config_1.resolveProfileName)(state.currentConfig, state.currentConfig.defaultProfile)}`,
+            `Available profiles: ${names}`,
+            `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
+        ];
+        ctx.ui.notify(lines.join('\n'), 'info');
+        actions.updateStatus(ctx);
+    };
+    const handleDiscover = async (args, ctx) => {
+        if (args.length > 0) {
+            ctx.ui.notify('Usage: /discovery discover (no arguments)', 'error');
+            return;
+        }
+        const models = (0, discover_1.discoverModels)(ctx);
+        const lines = [
+            'Discovered Models:',
+            ...Object.entries(models).map(([provider, modelList]) => {
+                const modelNames = modelList.map((m) => m.id).join(', ');
+                return `  ${provider}: ${modelNames}`;
+            }),
+        ];
+        ctx.ui.notify(lines.join('\n'), 'info');
+    };
+    const handleProfile = async (args, ctx) => {
+        if (args.length > 1) {
+            ctx.ui.notify('Usage: /discovery profile [name]', 'error');
+            return;
+        }
+        const profileName = args[0];
+        if (!profileName) {
+            ctx.ui.notify(`Current profile: ${state.selectedProfile}. Available: ${(0, config_1.profileNames)(state.currentConfig).join(', ')}`, 'info');
+            return;
+        }
+        if (!state.currentConfig.profiles[profileName]) {
+            ctx.ui.notify(`Unknown discovery profile: ${profileName}`, 'error');
+            return;
+        }
+        state.selectedProfile = profileName;
+        actions.persistState();
+        actions.updateStatus(ctx);
+        ctx.ui.notify(`Switched to discovery profile: ${state.selectedProfile}`, 'info');
+    };
+    const handleWidget = async (args, ctx) => {
+        if (args.length > 1) {
+            ctx.ui.notify('Usage: /discovery widget <on|off|toggle>', 'error');
+            return;
+        }
+        const cmd = args[0]?.toLowerCase();
+        if (cmd === 'on')
+            state.widgetEnabled = true;
+        else if (cmd === 'off')
+            state.widgetEnabled = false;
+        else
+            state.widgetEnabled = !state.widgetEnabled;
+        actions.persistState();
+        actions.updateStatus(ctx);
+        ctx.ui.notify(`Discovery widget ${state.widgetEnabled ? 'enabled' : 'disabled'}.`, 'info');
+    };
+    const handleDebug = async (args, ctx) => {
+        if (args.length > 1) {
+            ctx.ui.notify('Usage: /discovery debug <on|off|toggle>', 'error');
+            return;
+        }
+        const cmd = args[0]?.toLowerCase();
+        if (cmd === 'on')
+            state.debugEnabled = true;
+        else if (cmd === 'off')
+            state.debugEnabled = false;
+        else
+            state.debugEnabled = !state.debugEnabled;
+        actions.persistState();
+        ctx.ui.notify(`Discovery debug ${state.debugEnabled ? 'enabled' : 'disabled'}.`, 'info');
+    };
+    const handleReload = async (args, ctx) => {
+        if (args.length > 0) {
+            ctx.ui.notify('Usage: /discovery reload (no arguments)', 'error');
+            return;
+        }
+        actions.reloadConfig(ctx, { preserveDebug: true });
+        ctx.ui.notify(`Discovery config reloaded. Profiles: ${(0, config_1.profileNames)(state.currentConfig).join(', ')}`, 'info');
+    };
+    const handleInit = async (args, ctx) => {
+        if (args.length > 0) {
+            ctx.ui.notify('Usage: /discovery init (no arguments)', 'error');
+            return;
+        }
+        const configPath = (0, node_path_1.join)((0, pi_coding_agent_1.getAgentDir)(), 'model-discovery.json');
+        if ((0, node_fs_1.existsSync)(configPath)) {
+            ctx.ui.notify(`Config already exists at ${configPath}. Use /discovery reload to apply changes.`, 'warning');
+            return;
+        }
+        const defaultConfig = {
+            defaultProfile: 'auto',
+            debug: false,
+            profiles: {
+                auto: {
+                    high: {
+                        model: 'openai/gpt-4-turbo-preview',
+                        thinking: 'high',
+                    },
+                    medium: { model: 'google/gemini-pro', thinking: 'medium' },
+                    low: { model: 'anthropic/claude-3-haiku-20240307', thinking: 'low' },
+                },
+            },
+        };
+        try {
+            (0, node_fs_1.writeFileSync)(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+            ctx.ui.notify(`Created default config at ~/.pi/agent/model-discovery.json. Run /discovery reload to apply.`, 'info');
+        }
+        catch (err) {
+            ctx.ui.notify(`Failed to create config: ${err instanceof Error ? err.message : String(err)}`, 'error');
+        }
+    };
+    pi.registerCommand('discovery', {
+        description: 'Model discovery control center',
+        getArgumentCompletions: (prefix) => {
+            const trimmedLeft = prefix.trimStart();
+            const hasTrailingSpace = /\s$/.test(prefix);
+            const parts = trimmedLeft.length > 0 ? trimmedLeft.split(/\s+/) : [];
+            if (parts.length === 0) {
+                return getSubcommandCompletions('');
+            }
+            if (parts.length === 1 && !hasTrailingSpace) {
+                return getSubcommandCompletions(parts[0]);
+            }
+            const subcommand = parts[0];
+            const subArgs = parts.slice(1);
+            if (hasTrailingSpace && parts.length === 1) {
+                subArgs.push('');
+            }
+            switch (subcommand) {
+                case 'profile': {
+                    const profilePrefix = subArgs[0] ?? '';
+                    const items = (0, config_1.profileNames)(state.currentConfig)
+                        .filter((name) => name.startsWith(profilePrefix))
+                        .map((name) => ({
+                        value: `profile ${name}`,
+                        label: `discovery/${name}`,
+                        description: `Switch to discovery profile "${name}"`,
+                    }));
+                    return items.length > 0 ? items : null;
+                }
+                case 'widget': {
+                    const widgetPrefix = subArgs[0] ?? '';
+                    const items = ['on', 'off', 'toggle']
+                        .filter((v) => v.startsWith(widgetPrefix))
+                        .map((v) => ({
+                        value: `widget ${v}`,
+                        label: v,
+                        description: `Set widget to ${v}`,
+                    }));
+                    return items.length > 0 ? items : null;
+                }
+                case 'debug': {
+                    const debugPrefix = subArgs[0] ?? '';
+                    const items = ['on', 'off', 'toggle']
+                        .filter((v) => v.startsWith(debugPrefix))
+                        .map((v) => ({
+                        value: `debug ${v}`,
+                        label: v,
+                        description: `Discovery debug: ${v}`,
+                    }));
+                    return items.length > 0 ? items : null;
+                }
+            }
+            return null;
+        },
+        handler: async (args, ctx) => {
+            const parts = args?.trim().split(/\s+/) ?? [];
+            const subcommand = parts[0];
+            const subArgs = parts.slice(1);
+            switch (subcommand) {
+                case 'profile':
+                    await handleProfile(subArgs, ctx);
+                    break;
+                case 'widget':
+                    await handleWidget(subArgs, ctx);
+                    break;
+                case 'debug':
+                    await handleDebug(subArgs, ctx);
+                    break;
+                case 'reload':
+                    await handleReload(subArgs, ctx);
+                    break;
+                case 'init':
+                    await handleInit(subArgs, ctx);
+                    break;
+                case 'status':
+                    await handleStatus(subArgs, ctx);
+                    break;
+                case 'discover':
+                    await handleDiscover(subArgs, ctx);
+                    break;
+                case 'help':
+                case '?':
+                    if (subArgs.length > 0) {
+                        ctx.ui.notify('Usage: /discovery help (no arguments)', 'error');
+                        return;
+                    }
+                    ctx.ui.notify([
+                        'Discovery Subcommands:',
+                        '  status                      Show current status, profile, and widget state.',
+                        '  discover                    Discover available models.',
+                        '  profile [name]              Switch to a profile. Lists available if no name.',
+                        '  widget <on|off|toggle>      Control the persistent status widget visibility.',
+                        '  debug <on|off|toggle>       Control discovery debug logging.',
+                        '  reload                      Hot-reload the configuration JSON from .pi/model-discovery.json.',
+                        '  init                        Create a default configuration file if it does not exist.',
+                        '  help, ?                     Show this help message.',
+                    ].join('\n'), 'info');
+                    break;
+                default:
+                    if (subcommand) {
+                        ctx.ui.notify(`Unknown discovery subcommand: ${subcommand}. Try /discovery help`, 'error');
+                    }
+                    else {
+                        await handleStatus(subArgs, ctx);
+                    }
+                    break;
+            }
+        },
+    });
+};
+exports.registerCommands = registerCommands;
