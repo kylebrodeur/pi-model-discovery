@@ -59,10 +59,11 @@ export const performSync = async (
 
   // Combine results
   const totalAdded = results.flatMap(r => r.added);
+  const scopeMsg = config.addToScope ? ' Scope updated.' : '';
   if (totalAdded.length > 0) {
     return {
       added: totalAdded,
-      message: `Added ${totalAdded.length} model(s): ${totalAdded.join(', ')}. Run /reload to use them.`,
+      message: `Added ${totalAdded.length} new model(s): ${totalAdded.join(', ')}.${scopeMsg} Run /reload to use them.`,
       success: true,
     };
   }
@@ -73,7 +74,7 @@ export const performSync = async (
     return { added: [], message: failures.map(f => f.message).join('; '), success: false };
   }
 
-  return { added: [], message: 'All models already up to date.', success: true };
+  return { added: [], message: `Already up to date.${scopeMsg}`, success: true };
 };
 
 // ─── Provider-specific sync ─────────────────────────────────────────────────
@@ -111,8 +112,8 @@ const syncOllama = async (pi: ExtensionAPI, addToScope: boolean): Promise<SyncRe
 
   if (addToScope) {
     const settings = readJsonFile<any>(getSettingsPath()) ?? {};
-    const refs = added.map(name => `ollama/${name}`);
-    settings.enabledModels = [...new Set([...(settings.enabledModels ?? []), ...refs])];
+    const allOllamaRefs = modelsJson.providers.ollama!.models.map(m => `ollama/${m.id}`);
+    settings.enabledModels = [...new Set([...(settings.enabledModels ?? []), ...allOllamaRefs])];
     writeJsonFile(getSettingsPath(), settings);
   }
 
