@@ -200,6 +200,9 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
       id: m.name,
       name: displayName,
       reasoning: caps.reasoning,
+      thinkingLevelMap: caps.reasoning
+        ? { off: null, minimal: 'low', low: 'low', medium: 'medium', high: 'high' }
+        : { off: null, minimal: null, low: null, medium: null, high: null, xhigh: null },
       input: (caps.vision ? ['text', 'image'] : ['text']) as ('text' | 'image')[],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: caps.contextWindow,
