@@ -3,11 +3,18 @@ import { join } from 'node:path';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import type { ModelDiscoveryConfig, ConfigLoadResult, ParsedConfigFile } from './types';
 
+const FALLBACK_OLLAMA: Required<NonNullable<ModelDiscoveryConfig['providers']>['ollama']> = {
+  enabled: true,
+  baseUrl: 'http://127.0.0.1:11434',
+  cleanupStale: false,
+  cacheTtlHours: 24,
+};
+
 export const FALLBACK_CONFIG: ModelDiscoveryConfig = {
   debug: false,
   syncOnStartup: true,
   addToScope: true,
-  providers: { ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' } },
+  providers: { ollama: FALLBACK_OLLAMA },
 };
 
 const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
@@ -38,15 +45,30 @@ export const mergeConfig = (
   debug: override.debug ?? base.debug,
   syncOnStartup: override.syncOnStartup ?? base.syncOnStartup,
   addToScope: override.addToScope ?? base.addToScope,
-  providers: override.providers ?? base.providers,
+  providers: mergeProviders(base.providers, override.providers),
 });
+
+const mergeProviders = (
+  base: ModelDiscoveryConfig['providers'],
+  override: ModelDiscoveryConfig['providers'],
+): ModelDiscoveryConfig['providers'] => {
+  if (!override) return base;
+  const merged: ModelDiscoveryConfig['providers'] = { ...base };
+  if (override.ollama !== undefined) {
+    const baseOllama = base?.ollama ?? FALLBACK_OLLAMA;
+    merged.ollama = { ...baseOllama, ...override.ollama };
+  }
+  return merged;
+};
 
 export const normalizeConfig = (raw: ModelDiscoveryConfig): ConfigLoadResult => ({
   config: {
     debug: typeof raw.debug === 'boolean' ? raw.debug : FALLBACK_CONFIG.debug,
     syncOnStartup: typeof raw.syncOnStartup === 'boolean' ? raw.syncOnStartup : FALLBACK_CONFIG.syncOnStartup,
     addToScope: typeof raw.addToScope === 'boolean' ? raw.addToScope : FALLBACK_CONFIG.addToScope,
-    providers: raw.providers ?? FALLBACK_CONFIG.providers,
+    providers: {
+      ollama: { ...FALLBACK_OLLAMA, ...raw.providers?.ollama },
+    },
   },
   warnings: [],
 });

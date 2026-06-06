@@ -3,7 +3,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AutocompleteItem } from '@earendil-works/pi-tui';
 import type { ModelDiscoveryConfig, ModelDiscoveryState } from './types';
-import { FALLBACK_CONFIG } from './config';
+import { FALLBACK_CONFIG, mergeConfig, parseConfigFile } from './config';
 import { performSync } from './sync';
 
 export const registerCommands = (
@@ -100,14 +100,23 @@ export const registerCommands = (
     ctx.ui.notify(`Config reloaded.`, 'info');
   };
 
-  const handleInit = async (_args: string[], ctx: ExtensionContext) => {
+  const handleInit = async (args: string[], ctx: ExtensionContext) => {
     const configPath = join(getAgentDir(), 'local-providers.json');
-    if (existsSync(configPath)) {
-      ctx.ui.notify(`Config already exists at ${configPath}.`, 'warning');
+    const force = args.includes('--force') || args.includes('-f');
+    const existing = parseConfigFile(configPath).config;
+    const hasExisting = Object.keys(existing).length > 0;
+
+    if (hasExisting && !force) {
+      const merged = mergeConfig(FALLBACK_CONFIG, existing);
+      writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf-8');
+      ctx.ui.notify(`Updated existing config with new defaults. Run /providers reload to apply.`, 'info');
       return;
     }
+
     writeFileSync(configPath, JSON.stringify(FALLBACK_CONFIG, null, 2), 'utf-8');
-    ctx.ui.notify(`Created default config. Run /providers reload to apply.`, 'info');
+    ctx.ui.notify(hasExisting
+      ? `Reset config to defaults. Run /providers reload to apply.`
+      : `Created default config. Run /providers reload to apply.`, 'info');
   };
 
   pi.registerCommand('providers', {
@@ -154,7 +163,7 @@ export const registerCommands = (
              '  sync [--force]     Sync local providers. --force bypasses capability cache.',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
-             '  init               Create default config file.',
+             '  init [--force]     Create or update config with current defaults. Use --force to reset.',
              '  help               Show this help.',
             ].join('\n'), 'info');
           break;
