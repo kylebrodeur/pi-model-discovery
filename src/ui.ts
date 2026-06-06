@@ -2,8 +2,7 @@ import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 
 export const updateStatus = (
   ctx: ExtensionContext,
-  enabled: boolean,
+  _enabled: boolean,
 ) => {
-  ctx.ui.setStatus('discovery', ctx.ui.theme.fg('dim', `discovery:${enabled ? 'on' : 'off'}`));
-  ctx.ui.setWidget('discovery', undefined);
+  ctx.ui.setStatus('providers', ctx.ui.theme.fg('dim', 'providers'));
 };

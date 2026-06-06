@@ -3,6 +3,7 @@ import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AutocompleteItem } from '@earendil-works/pi-tui';
 import type { ModelDiscoveryConfig, ModelDiscoveryState } from './types';
+import { FALLBACK_CONFIG } from './config';
 import { performSync } from './sync';
 
 export const registerCommands = (
@@ -105,12 +106,7 @@ export const registerCommands = (
       ctx.ui.notify(`Config already exists at ${configPath}.`, 'warning');
       return;
     }
-    const defaultConfig = {
-      syncOnStartup: true,
-      addToScope: true,
-      providers: { ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' } },
-    };
-    writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+    writeFileSync(configPath, JSON.stringify(FALLBACK_CONFIG, null, 2), 'utf-8');
     ctx.ui.notify(`Created default config. Run /providers reload to apply.`, 'info');
   };
 
