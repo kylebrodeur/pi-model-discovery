@@ -1,6 +1,9 @@
 export interface OllamaProviderConfig {
   enabled?: boolean;
   baseUrl?: string;
+  cleanupStale?: boolean;
+  /** How long to cache per-model /api/show results, in hours. 0 = always refresh. */
+  cacheTtlHours?: number;
 }
 
 export interface ProviderConfigs {
@@ -17,6 +20,14 @@ export interface ModelDiscoveryConfig {
 export interface ModelDiscoveryState {
   enabled: boolean;
   debugEnabled: boolean;
+  lastSync?: {
+    ollama?: {
+      modelIds: string[];
+      vision: string[];
+      reasoning: string[];
+      tools: string[];
+    };
+  };
   timestamp: number;
 }
 

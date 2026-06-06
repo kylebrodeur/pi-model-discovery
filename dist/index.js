@@ -10,9 +10,9 @@ const modelDiscoveryExtension = async (pi) => {
     let currentCwd = process.cwd();
     let debugEnabled = false;
     let enabled = false;
+    let lastSync = undefined;
     let lastPersistedSnapshot;
-    const persistState = () => {
-        const state = (0, state_1.buildPersistedState)(enabled, debugEnabled);
+    const persist = (state) => {
         const snapshot = JSON.stringify({ ...state, timestamp: 0 });
         if (snapshot === lastPersistedSnapshot)
             return;
@@ -20,7 +20,11 @@ const modelDiscoveryExtension = async (pi) => {
         lastPersistedSnapshot = snapshot;
     };
     const actions = {
-        persistState,
+        persistState: () => persist((0, state_1.buildPersistedState)(enabled, debugEnabled, lastSync)),
+        persistLastSync: (next) => {
+            lastSync = next;
+            persist((0, state_1.buildPersistedState)(enabled, debugEnabled, lastSync));
+        },
         updateStatus: (ctx) => (0, ui_1.updateStatus)(ctx, enabled),
         reloadConfig: (ctx, options) => {
             const loaded = (0, config_1.loadModelDiscoveryConfig)(currentCwd);
@@ -39,11 +43,14 @@ const modelDiscoveryExtension = async (pi) => {
             addToScope: false,
             providers: currentConfig.providers ?? {},
         });
+        if (result.capabilities) {
+            lastSync = result.capabilities;
+        }
         if (result.added.length > 0) {
-            console.log(`[Discovery] Registered ${result.added.length} Ollama model(s).`);
+            console.log(`[Providers] Registered ${result.added.length} Ollama model(s).`);
         }
         else if (!result.success) {
-            console.log(`[Discovery] ${result.message}`);
+            console.log(`[Providers] ${result.message}`);
         }
     }
     const restoreStateFromSession = async (ctx) => {
@@ -58,8 +65,10 @@ const modelDiscoveryExtension = async (pi) => {
         if ((0, state_1.isModelDiscoveryState)(savedState)) {
             enabled = savedState.enabled;
             debugEnabled = savedState.debugEnabled ?? debugEnabled;
+            if (savedState.lastSync)
+                lastSync = savedState.lastSync;
         }
-        persistState();
+        actions.persistState();
         actions.updateStatus(ctx);
     };
     (0, commands_1.registerCommands)(pi, {
@@ -68,6 +77,7 @@ const modelDiscoveryExtension = async (pi) => {
         set enabled(v) { enabled = v; },
         get debugEnabled() { return debugEnabled; },
         set debugEnabled(v) { debugEnabled = v; },
+        get lastSync() { return lastSync; },
     }, actions);
     pi.on('session_start', async (_event, ctx) => {
         await restoreStateFromSession(ctx);
@@ -78,12 +88,16 @@ const modelDiscoveryExtension = async (pi) => {
                 addToScope: true,
                 providers: currentConfig.providers ?? {},
             });
+            if (result.capabilities) {
+                lastSync = result.capabilities;
+                actions.persistState();
+            }
             if (result.success && result.added.length > 0) {
-                ctx.ui.notify(`[Discovery] Scope updated with ${result.added.length} model(s).`, 'info');
+                ctx.ui.notify(`[Providers] Scope updated with ${result.added.length} model(s).`, 'info');
             }
         }
         if (debugEnabled)
-            ctx.ui.notify('Discovery initialized.', 'info');
+            ctx.ui.notify('Providers initialized.', 'info');
     });
 };
 exports.default = modelDiscoveryExtension;

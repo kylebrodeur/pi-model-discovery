@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { ModelDiscoveryConfig } from './types';
+import type { ModelDiscoveryConfig, ModelDiscoveryState } from './types';
 import { FALLBACK_CONFIG, loadModelDiscoveryConfig } from './config';
 import { isModelDiscoveryState, buildPersistedState } from './state';
 import { updateStatus } from './ui';
@@ -11,10 +11,10 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let currentCwd = process.cwd();
   let debugEnabled = false;
   let enabled = false;
+  let lastSync: ModelDiscoveryState['lastSync'] = undefined;
   let lastPersistedSnapshot: string | undefined;
 
-  const persistState = () => {
-    const state = buildPersistedState(enabled, debugEnabled);
+  const persist = (state: ModelDiscoveryState) => {
     const snapshot = JSON.stringify({ ...state, timestamp: 0 });
     if (snapshot === lastPersistedSnapshot) return;
     pi.appendEntry('discovery-state', state);
@@ -22,7 +22,11 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   };
 
   const actions = {
-    persistState,
+    persistState: () => persist(buildPersistedState(enabled, debugEnabled, lastSync)),
+    persistLastSync: (next: ModelDiscoveryState['lastSync']) => {
+      lastSync = next;
+      persist(buildPersistedState(enabled, debugEnabled, lastSync));
+    },
     updateStatus: (ctx: ExtensionContext) => updateStatus(ctx, enabled),
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => {
       const loaded = loadModelDiscoveryConfig(currentCwd);
@@ -41,10 +45,13 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       addToScope: false,
       providers: currentConfig.providers ?? {},
     });
+    if (result.capabilities) {
+      lastSync = result.capabilities;
+    }
     if (result.added.length > 0) {
-      console.log(`[Discovery] Registered ${result.added.length} Ollama model(s).`);
+      console.log(`[Providers] Registered ${result.added.length} Ollama model(s).`);
     } else if (!result.success) {
-      console.log(`[Discovery] ${result.message}`);
+      console.log(`[Providers] ${result.message}`);
     }
   }
 
@@ -62,9 +69,10 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     if (isModelDiscoveryState(savedState)) {
       enabled = savedState.enabled;
       debugEnabled = savedState.debugEnabled ?? debugEnabled;
+      if (savedState.lastSync) lastSync = savedState.lastSync;
     }
 
-    persistState();
+    actions.persistState();
     actions.updateStatus(ctx);
   };
 
@@ -76,6 +84,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       set enabled(v) { enabled = v; },
       get debugEnabled() { return debugEnabled; },
       set debugEnabled(v) { debugEnabled = v; },
+      get lastSync() { return lastSync; },
     },
     actions,
   );
@@ -90,12 +99,16 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
         addToScope: true,
         providers: currentConfig.providers ?? {},
       });
+      if (result.capabilities) {
+        lastSync = result.capabilities;
+        actions.persistState();
+      }
       if (result.success && result.added.length > 0) {
-        ctx.ui.notify(`[Discovery] Scope updated with ${result.added.length} model(s).`, 'info');
+        ctx.ui.notify(`[Providers] Scope updated with ${result.added.length} model(s).`, 'info');
       }
     }
 
-    if (debugEnabled) ctx.ui.notify('Discovery initialized.', 'info');
+    if (debugEnabled) ctx.ui.notify('Providers initialized.', 'info');
   });
 };
 

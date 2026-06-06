@@ -48,8 +48,8 @@ const normalizeConfig = (raw) => ({
 });
 exports.normalizeConfig = normalizeConfig;
 const loadModelDiscoveryConfig = (cwd) => {
-    const globalPath = (0, node_path_1.join)((0, pi_coding_agent_1.getAgentDir)(), 'model-discovery.json');
-    const projectPath = (0, node_path_1.join)(cwd, '.pi', 'model-discovery.json');
+    const globalPath = (0, node_path_1.join)((0, pi_coding_agent_1.getAgentDir)(), 'local-providers.json');
+    const projectPath = (0, node_path_1.join)(cwd, '.pi', 'local-providers.json');
     const globalResult = (0, exports.parseConfigFile)(globalPath);
     const projectResult = (0, exports.parseConfigFile)(projectPath);
     const merged = (0, exports.mergeConfig)((0, exports.mergeConfig)(exports.FALLBACK_CONFIG, globalResult.config), projectResult.config);

@@ -7,8 +7,8 @@ const node_path_1 = require("node:path");
 const sync_1 = require("./sync");
 const registerCommands = (pi, state, actions) => {
     const SUBCOMMAND_DETAILS = [
-        { name: 'status', desc: 'Show sync status and config' },
-        { name: 'sync', desc: 'Sync Ollama models into pi configuration' },
+        { name: 'status', desc: 'Show sync status and registered models' },
+        { name: 'sync', desc: 'Sync local providers into pi configuration' },
         { name: 'debug', desc: 'Toggle debug logging' },
         { name: 'reload', desc: 'Reload configuration' },
         { name: 'init', desc: 'Create default config file' },
@@ -20,30 +20,55 @@ const registerCommands = (pi, state, actions) => {
         }));
         return items.length > 0 ? items : null;
     };
-    const handleStatus = async (args, ctx) => {
+    const handleStatus = async (_args, ctx) => {
         const ollamaCfg = state.currentConfig.providers?.ollama;
         const ollamaEnabled = ollamaCfg?.enabled !== false;
         const ollamaBaseUrl = ollamaCfg?.baseUrl ?? 'http://127.0.0.1:11434';
         const lines = [
-            `Model Discovery Status:`,
-            `Enabled: ${state.enabled ? 'yes' : 'off'}`,
+            `Local Providers Status:`,
             `Sync on startup: ${state.currentConfig.syncOnStartup ? 'yes' : 'no'}`,
             `Add to scope: ${state.currentConfig.addToScope ? 'yes' : 'no'}`,
+            `Cleanup stale: ${ollamaCfg?.cleanupStale ? 'yes' : 'no'}`,
+            `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
+            ``,
             `Providers:`,
             `  ollama: ${ollamaEnabled ? `watching (${ollamaBaseUrl})` : 'disabled'}`,
-            `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
         ];
+        if (state.lastSync?.ollama) {
+            const o = state.lastSync.ollama;
+            lines.push(``, `Registered Ollama models: ${o.modelIds.length}`);
+            const capParts = [];
+            if (o.vision.length > 0)
+                capParts.push(`${o.vision.length} vision`);
+            if (o.reasoning.length > 0)
+                capParts.push(`${o.reasoning.length} reasoning`);
+            if (o.tools.length > 0)
+                capParts.push(`${o.tools.length} tools`);
+            if (capParts.length > 0)
+                lines.push(`  ${capParts.join(' | ')}`);
+            const textOnly = o.modelIds.filter(id => !o.vision.includes(id) && !o.reasoning.includes(id) && !o.tools.includes(id));
+            if (textOnly.length > 0)
+                lines.push(`  text-only: ${textOnly.length}`);
+        }
+        else {
+            lines.push(``, `No sync has run yet this session.`);
+        }
         ctx.ui.notify(lines.join('\n'), 'info');
         actions.updateStatus(ctx);
     };
     const handleSync = async (args, ctx) => {
-        const providers = state.currentConfig.providers ?? {};
+        const force = args.includes('--force') || args.includes('-f');
         const result = await (0, sync_1.performSync)(pi, {
             syncOnStartup: false,
             addToScope: state.currentConfig.addToScope ?? true,
-            providers,
+            providers: state.currentConfig.providers ?? {},
+            forceRefresh: force,
         });
-        ctx.ui.notify(`[Discovery] ${result.message}`, result.success ? 'info' : 'error');
+        if (result.capabilities) {
+            actions.persistLastSync(result.capabilities);
+        }
+        const note = force ? ' (cache bypassed)' : '';
+        ctx.ui.notify(`[Providers] ${result.message}${note}`, result.success ? 'info' : 'error');
     };
     const handleDebug = async (args, ctx) => {
         const cmd = args[0]?.toLowerCase();
@@ -56,12 +81,12 @@ const registerCommands = (pi, state, actions) => {
         actions.persistState();
         ctx.ui.notify(`Debug ${state.debugEnabled ? 'enabled' : 'disabled'}.`, 'info');
     };
-    const handleReload = async (args, ctx) => {
+    const handleReload = async (_args, ctx) => {
         actions.reloadConfig(ctx, { preserveDebug: true });
         ctx.ui.notify(`Config reloaded.`, 'info');
     };
-    const handleInit = async (args, ctx) => {
-        const configPath = (0, node_path_1.join)((0, pi_coding_agent_1.getAgentDir)(), 'model-discovery.json');
+    const handleInit = async (_args, ctx) => {
+        const configPath = (0, node_path_1.join)((0, pi_coding_agent_1.getAgentDir)(), 'local-providers.json');
         if ((0, node_fs_1.existsSync)(configPath)) {
             ctx.ui.notify(`Config already exists at ${configPath}.`, 'warning');
             return;
@@ -72,10 +97,10 @@ const registerCommands = (pi, state, actions) => {
             providers: { ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' } },
         };
         (0, node_fs_1.writeFileSync)(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
-        ctx.ui.notify(`Created default config. Run /discovery reload to apply.`, 'info');
+        ctx.ui.notify(`Created default config. Run /providers reload to apply.`, 'info');
     };
-    pi.registerCommand('discovery', {
-        description: 'Model discovery control center',
+    pi.registerCommand('providers', {
+        description: 'Local model provider discovery control',
         getArgumentCompletions: (prefix) => {
             const trimmedLeft = prefix.trimStart();
             const hasTrailingSpace = /\s$/.test(prefix);
@@ -91,6 +116,12 @@ const registerCommands = (pi, state, actions) => {
             if (subcommand === 'debug') {
                 const items = ['on', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
                     value: `debug ${v}`, label: v,
+                }));
+                return items.length > 0 ? items : null;
+            }
+            if (subcommand === 'sync') {
+                const items = ['--force', '-f'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
+                    value: v, label: v, description: 'Bypass capability cache',
                 }));
                 return items.length > 0 ? items : null;
             }
@@ -118,18 +149,18 @@ const registerCommands = (pi, state, actions) => {
                     break;
                 case 'help':
                 case '?':
-                    ctx.ui.notify(['Discovery Commands:',
-                        '  status      Show sync status and config.',
-                        '  sync        Sync Ollama models into pi configuration.',
-                        '  debug on/off Toggle debug logging.',
-                        '  reload      Reload configuration.',
-                        '  init        Create default config file.',
-                        '  help        Show this help.',
+                    ctx.ui.notify(['Providers Commands:',
+                        '  status             Show sync status and registered models with capabilities.',
+                        '  sync [--force]     Sync local providers. --force bypasses capability cache.',
+                        '  debug on/off       Toggle debug logging.',
+                        '  reload             Reload configuration.',
+                        '  init               Create default config file.',
+                        '  help               Show this help.',
                     ].join('\n'), 'info');
                     break;
                 default:
                     if (subcommand)
-                        ctx.ui.notify(`Unknown: ${subcommand}. Try /discovery help`, 'error');
+                        ctx.ui.notify(`Unknown: ${subcommand}. Try /providers help`, 'error');
                     else
                         await handleStatus(subArgs, ctx);
                     break;

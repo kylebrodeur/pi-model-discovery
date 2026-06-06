@@ -9,8 +9,10 @@ export const isModelDiscoveryState = (value: unknown): value is ModelDiscoverySt
 export const buildPersistedState = (
   enabled: boolean,
   debugEnabled: boolean,
+  lastSync?: ModelDiscoveryState['lastSync'],
 ): ModelDiscoveryState => ({
   enabled,
   debugEnabled,
+  lastSync,
   timestamp: Date.now(),
 });

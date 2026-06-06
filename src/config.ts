@@ -52,8 +52,8 @@ export const normalizeConfig = (raw: ModelDiscoveryConfig): ConfigLoadResult => 
 });
 
 export const loadModelDiscoveryConfig = (cwd: string): ConfigLoadResult => {
-  const globalPath = join(getAgentDir(), 'model-discovery.json');
-  const projectPath = join(cwd, '.pi', 'model-discovery.json');
+  const globalPath = join(getAgentDir(), 'local-providers.json');
+  const projectPath = join(cwd, '.pi', 'local-providers.json');
   const globalResult = parseConfigFile(globalPath);
   const projectResult = parseConfigFile(projectPath);
   const merged = mergeConfig(

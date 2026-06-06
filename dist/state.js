@@ -8,9 +8,10 @@ const isModelDiscoveryState = (value) => {
     return typeof v.enabled === 'boolean' && typeof v.timestamp === 'number';
 };
 exports.isModelDiscoveryState = isModelDiscoveryState;
-const buildPersistedState = (enabled, debugEnabled) => ({
+const buildPersistedState = (enabled, debugEnabled, lastSync) => ({
     enabled,
     debugEnabled,
+    lastSync,
     timestamp: Date.now(),
 });
 exports.buildPersistedState = buildPersistedState;
