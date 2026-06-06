@@ -1,6 +1,6 @@
 {
   "name": "@kylebrodeur/pi-model-discovery",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A pi extension for discovering and managing models.",
   "main": "dist/index.js",
   "pi": {
