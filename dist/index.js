@@ -36,7 +36,7 @@ const modelDiscoveryExtension = async (pi) => {
     if (currentConfig.syncOnStartup) {
         const result = await (0, sync_1.performSync)(pi, {
             syncOnStartup: true,
-            addToScope: currentConfig.addToScope ?? true,
+            addToScope: false,
             providers: currentConfig.providers ?? {},
         });
         if (result.added.length > 0) {
@@ -71,6 +71,17 @@ const modelDiscoveryExtension = async (pi) => {
     }, actions);
     pi.on('session_start', async (_event, ctx) => {
         await restoreStateFromSession(ctx);
+        // Scope sync runs after Pi has settled, avoiding startup overwrite
+        if (currentConfig.addToScope) {
+            const result = await (0, sync_1.performSync)(pi, {
+                syncOnStartup: false,
+                addToScope: true,
+                providers: currentConfig.providers ?? {},
+            });
+            if (result.success && result.added.length > 0) {
+                ctx.ui.notify(`[Discovery] Scope updated with ${result.added.length} model(s).`, 'info');
+            }
+        }
         if (debugEnabled)
             ctx.ui.notify('Discovery initialized.', 'info');
     });
