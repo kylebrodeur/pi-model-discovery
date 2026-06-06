@@ -5,6 +5,7 @@ import { isModelDiscoveryState, buildPersistedState } from './state';
 import { updateStatus } from './ui';
 import { registerCommands } from './commands';
 import { performSync } from './sync';
+import { updateWidget, clearWidget, snapshotFromState, type WidgetData } from './widget';
 
 const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let currentConfig: ModelDiscoveryConfig = FALLBACK_CONFIG;
@@ -13,6 +14,9 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let enabled = false;
   let lastSync: ModelDiscoveryState['lastSync'] = undefined;
   let lastPersistedSnapshot: string | undefined;
+  let currentModelRef: string | null = null;
+  let thinkingLevel: string | null = null;
+  let activeCtx: ExtensionContext | null = null;
 
   const persist = (state: ModelDiscoveryState) => {
     const snapshot = JSON.stringify({ ...state, timestamp: 0 });
@@ -21,11 +25,25 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     lastPersistedSnapshot = snapshot;
   };
 
+  const buildWidgetData = (): WidgetData => {
+    const total = lastSync?.ollama?.modelIds.length ?? 0;
+    const current = currentModelRef
+      ? snapshotFromState(currentModelRef, { enabled, debugEnabled, lastSync, timestamp: 0 })
+      : null;
+    return { current, totalRegistered: total, thinkingLevel };
+  };
+
+  const refreshWidget = () => {
+    if (!activeCtx) return;
+    updateWidget(activeCtx, buildWidgetData());
+  };
+
   const actions = {
     persistState: () => persist(buildPersistedState(enabled, debugEnabled, lastSync)),
     persistLastSync: (next: ModelDiscoveryState['lastSync']) => {
       lastSync = next;
       persist(buildPersistedState(enabled, debugEnabled, lastSync));
+      refreshWidget();
     },
     updateStatus: (ctx: ExtensionContext) => updateStatus(ctx, enabled),
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => {
@@ -57,6 +75,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
 
   const restoreStateFromSession = async (ctx: ExtensionContext) => {
     currentCwd = ctx.cwd;
+    activeCtx = ctx;
     actions.reloadConfig(ctx);
     enabled = true;
 
@@ -90,6 +109,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   );
 
   pi.on('session_start', async (_event, ctx) => {
+    activeCtx = ctx;
     await restoreStateFromSession(ctx);
 
     // Scope sync runs after Pi has settled, avoiding startup overwrite
@@ -108,7 +128,25 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       }
     }
 
+    refreshWidget();
     if (debugEnabled) ctx.ui.notify('Providers initialized.', 'info');
+  });
+
+  pi.on('session_shutdown', () => {
+    if (activeCtx) clearWidget(activeCtx);
+    activeCtx = null;
+  });
+
+  pi.on('model_select', async (event, ctx) => {
+    currentModelRef = `${event.model.provider}/${event.model.id}`;
+    activeCtx = ctx;
+    refreshWidget();
+  });
+
+  pi.on('thinking_level_select', async (event, ctx) => {
+    thinkingLevel = String(event.level);
+    activeCtx = ctx;
+    refreshWidget();
   });
 };
 

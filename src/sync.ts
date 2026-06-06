@@ -88,6 +88,9 @@ export interface SyncResult {
       vision: string[];
       reasoning: string[];
       tools: string[];
+      contextWindows: Record<string, number>;
+      families: Record<string, string>;
+      parameterSizes: Record<string, string>;
     };
   };
 }
@@ -150,7 +153,7 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
   }
 
   if (!tags.models?.length) {
-    return { added: [], message: 'No Ollama models found', success: true, capabilities: { ollama: { modelIds: [], vision: [], reasoning: [], tools: [] } } };
+    return { added: [], message: 'No Ollama models found', success: true, capabilities: { ollama: { modelIds: [], vision: [], reasoning: [], tools: [], contextWindows: {}, families: {}, parameterSizes: {} } } };
   }
 
   // Resolve capabilities: cache first, fetch /api/show for cache misses
@@ -184,6 +187,9 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
   const vision: string[] = [];
   const reasoning: string[] = [];
   const tools: string[] = [];
+  const contextWindows: Record<string, number> = {};
+  const families: Record<string, string> = {};
+  const parameterSizes: Record<string, string> = {};
 
   const models = tags.models.map((m) => {
     const caps = cache[m.name];
@@ -191,6 +197,9 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
     if (caps.vision) vision.push(m.name);
     if (caps.reasoning) reasoning.push(m.name);
     if (caps.tools) tools.push(m.name);
+    contextWindows[m.name] = caps.contextWindow;
+    if (caps.family) families[m.name] = caps.family;
+    if (caps.parameterSize) parameterSizes[m.name] = caps.parameterSize;
 
     const displayName = caps.parameterSize
       ? `${m.name} (${caps.parameterSize})`
@@ -225,7 +234,7 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
     added: modelIds,
     message: `${modelIds.length} Ollama model(s) registered.`,
     success: true,
-    capabilities: { ollama: { modelIds, vision, reasoning, tools } },
+    capabilities: { ollama: { modelIds, vision, reasoning, tools, contextWindows, families, parameterSizes } },
   };
 };
 

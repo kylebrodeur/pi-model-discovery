@@ -24,6 +24,7 @@ export const registerCommands = (
   const SUBCOMMAND_DETAILS = [
     { name: 'status', desc: 'Show sync status and registered models' },
     { name: 'sync', desc: 'Sync local providers into pi configuration' },
+    { name: 'info', desc: 'Show details for a specific model' },
     { name: 'debug', desc: 'Toggle debug logging' },
     { name: 'reload', desc: 'Reload configuration' },
     { name: 'init', desc: 'Create default config file' },
@@ -69,6 +70,43 @@ export const registerCommands = (
 
     ctx.ui.notify(lines.join('\n'), 'info');
     actions.updateStatus(ctx);
+  };
+
+  const handleInfo = async (args: string[], ctx: ExtensionContext) => {
+    const modelId = args[0];
+    if (!modelId) {
+      ctx.ui.notify('Usage: /providers info <model-id-or-name>', 'warning');
+      return;
+    }
+    const ollama = state.lastSync?.ollama;
+    if (!ollama) {
+      ctx.ui.notify('No sync has run yet this session.', 'warning');
+      return;
+    }
+    // Allow partial match
+    const id = ollama.modelIds.find(
+      (m) => m === modelId || m.includes(modelId),
+    );
+    if (!id) {
+      ctx.ui.notify(`Model "${modelId}" not found. Try /providers status.`, 'error');
+      return;
+    }
+    const ctx2 = ollama.contextWindows[id] ?? 0;
+    const fmtCtx = ctx2 >= 1_000_000
+      ? `${(ctx2 / 1_000_000).toFixed(1)}M`
+      : ctx2 >= 1_000
+        ? `${Math.round(ctx2 / 1_000)}K`
+        : String(ctx2);
+    const lines = [
+      `ollama/${id}`,
+      `  context:    ${fmtCtx} tokens`,
+      `  family:     ${ollama.families[id] ?? 'unknown'}`,
+      `  parameters: ${ollama.parameterSizes[id] ?? 'unknown'}`,
+      `  vision:     ${ollama.vision.includes(id) ? 'yes' : 'no'}`,
+      `  thinking:   ${ollama.reasoning.includes(id) ? 'yes' : 'no'}`,
+      `  tools:      ${ollama.tools.includes(id) ? 'yes' : 'no'}`,
+    ];
+    ctx.ui.notify(lines.join('\n'), 'info');
   };
 
   const handleSync = async (args: string[], ctx: ExtensionContext) => {
@@ -152,6 +190,7 @@ export const registerCommands = (
       const subArgs = parts.slice(1);
       switch (subcommand) {
         case 'sync': await handleSync(subArgs, ctx); break;
+        case 'info': await handleInfo(subArgs, ctx); break;
         case 'debug': await handleDebug(subArgs, ctx); break;
         case 'reload': await handleReload(subArgs, ctx); break;
         case 'init': await handleInit(subArgs, ctx); break;
@@ -161,6 +200,7 @@ export const registerCommands = (
             ['Providers Commands:',
              '  status             Show sync status and registered models with capabilities.',
              '  sync [--force]     Sync local providers. --force bypasses capability cache.',
+             '  info <model>       Show details (context, capabilities) for a specific model.',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
              '  init [--force]     Create or update config with current defaults. Use --force to reset.',

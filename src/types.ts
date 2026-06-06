@@ -26,6 +26,9 @@ export interface ModelDiscoveryState {
       vision: string[];
       reasoning: string[];
       tools: string[];
+      contextWindows: Record<string, number>;
+      families: Record<string, string>;
+      parameterSizes: Record<string, string>;
     };
   };
   timestamp: number;
