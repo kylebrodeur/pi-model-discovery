@@ -31,10 +31,22 @@ pi update npm:@kylebrodeur/pi-model-discovery
 | `/providers status` | Show current config, registered models, and capability counts |
 | `/providers sync` | Re-run the discovery sync (uses cache) |
 | `/providers sync --force` | Bypass the capability cache and refetch from Ollama |
+| `/providers info <model>` | Show context window, family, parameters, capabilities for a model (partial match) |
 | `/providers init` | Create a default `local-providers.json` config file |
 | `/providers reload` | Reload config without restarting Pi |
 | `/providers debug on/off` | Toggle debug logging |
 | `/providers help` | Show command help |
+
+## Widget
+
+A persistent indicator below the editor shows the current model's metadata and updates live as you switch models or change thinking level:
+
+```
+gemma4:12b · gemma4 · 12B
+ctx: 262K · thinking: medium    ● vision  ● thinking  ● tools
+```
+
+When no model is selected, shows: `○ local models: 21 registered`.
 
 `/providers status` output looks like:
 
