@@ -1,111 +1,120 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getAgentDir } from '@earendil-works/pi-coding-agent';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type { SyncConfig } from './types';
 
-// TYPES
-interface OllamaListEntry {
-  name: string;
-}
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface OllamaListEntry { name: string }
 interface ModelsJson {
   providers: {
-    ollama?: {
-      models: { id: string }[];
-    };
+    ollama?: { models: { id: string }[] };
   };
 }
-interface SyncConfig {
-  syncOnStartup: boolean;
-  addToScope: boolean;
-}
-export interface SyncResult {
-  added: string[];
-  message: string;
-  success: boolean;
-}
 
-// OLLAMA DISCOVERY LOGIC
-const parseOllamaList = (output: string): OllamaListEntry[] => {
-  return output.trim().split('\n').slice(1).map(line => ({ name: line.split(/\s+/)[0] }));
-};
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const parseOllamaList = (output: string): OllamaListEntry[] =>
+  output.trim().split('\n').slice(1).map(line => ({ name: line.split(/\s+/)[0] }));
 
 const inferCapabilities = (modelName: string): Record<string, any> => {
   const lower = modelName.toLowerCase();
   const entry: Record<string, any> = { contextWindow: 128000 };
-  if (['vl', 'vision', 'ocr'].some(kw => lower.includes(kw))) {
-    entry.input = ['text', 'image'];
-  }
-  if (['gemma2', 'qwen2', 'llama3'].some(kw => lower.includes(kw))) {
-    entry.contextWindow = 262144;
-  }
+  if (['vl', 'vision', 'ocr'].some(kw => lower.includes(kw))) entry.input = ['text', 'image'];
   return entry;
 };
 
-// SETTINGS & MODELS JSON FILE OPERATIONS
 const getSettingsPath = () => join(getAgentDir(), 'settings.json');
 const getModelsJsonPath = () => join(getAgentDir(), 'models.json');
 
 const readJsonFile = <T>(path: string): T | null => {
   if (!existsSync(path)) return null;
-  try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return null; }
 };
 
 const writeJsonFile = (path: string, data: any): void => {
   writeFileSync(path, JSON.stringify(data, null, 2));
 };
 
-// CORE SYNC FUNCTION
-export const performSync = async (pi: ExtensionAPI, config: SyncConfig): Promise<SyncResult> => {
-  let ollamaOutput: string;
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+export interface SyncResult {
+  added: string[];
+  message: string;
+  success: boolean;
+}
+
+export const performSync = async (
+  pi: ExtensionAPI,
+  config: SyncConfig,
+): Promise<SyncResult> => {
+  const results: SyncResult[] = [];
+
+  // ── Ollama provider ──────────────────────────────────────────────────
+  if (config.providers.ollama?.enabled !== false) {
+    const result = await syncOllama(pi, config.addToScope);
+    results.push(result);
+  }
+
+  // Combine results
+  const totalAdded = results.flatMap(r => r.added);
+  if (totalAdded.length > 0) {
+    return {
+      added: totalAdded,
+      message: `Added ${totalAdded.length} model(s): ${totalAdded.join(', ')}. Run /reload to use them.`,
+      success: true,
+    };
+  }
+
+  const allSucceeded = results.every(r => r.success);
+  if (!allSucceeded) {
+    const failures = results.filter(r => !r.success);
+    return { added: [], message: failures.map(f => f.message).join('; '), success: false };
+  }
+
+  return { added: [], message: 'All models already up to date.', success: true };
+};
+
+// ─── Provider-specific sync ─────────────────────────────────────────────────
+
+const syncOllama = async (pi: ExtensionAPI, addToScope: boolean): Promise<SyncResult> => {
+  let output: string;
   try {
     const result = await pi.exec('ollama', ['list'], { timeout: 10000 });
-    if (result.code !== 0) throw new Error('Ollama not available');
-    ollamaOutput = result.stdout;
+    if (result.code !== 0) return { added: [], message: 'Ollama not available', success: false };
+    output = result.stdout;
   } catch {
-    return { added: [], message: 'Ollama not available or timed out.', success: false };
+    return { added: [], message: 'Ollama not available', success: false };
   }
 
-  const discoveredModels = parseOllamaList(ollamaOutput);
-  if (discoveredModels.length === 0) {
-    return { added: [], message: 'No local Ollama models found.', success: true };
-  }
+  const discovered = parseOllamaList(output);
+  if (discovered.length === 0) return { added: [], message: 'No Ollama models found', success: true };
 
   const modelsJson = readJsonFile<ModelsJson>(getModelsJsonPath());
-  if (!modelsJson) {
-    return { added: [], message: 'Could not read models.json.', success: false };
-  }
+  if (!modelsJson) return { added: [], message: 'models.json not found', success: false };
 
   modelsJson.providers.ollama ??= { models: [] };
-  const existingModelIds = new Set(modelsJson.providers.ollama.models.map(m => m.id));
-  const newModels: string[] = [];
+  const existing = new Set(modelsJson.providers.ollama.models.map(m => m.id));
+  const added: string[] = [];
 
-  for (const model of discoveredModels) {
-    if (!existingModelIds.has(model.name)) {
-      modelsJson.providers.ollama.models.push({ id: model.name, ...inferCapabilities(model.name) });
-      newModels.push(model.name);
+  for (const m of discovered) {
+    if (!existing.has(m.name)) {
+      modelsJson.providers.ollama.models.push({ id: m.name, ...inferCapabilities(m.name) });
+      added.push(m.name);
     }
   }
 
-  if (newModels.length === 0) {
-    return { added: [], message: 'All local Ollama models are already configured.', success: true };
-  }
+  if (added.length === 0) return { added: [], message: 'Ollama models up to date.', success: true };
 
   writeJsonFile(getModelsJsonPath(), modelsJson);
 
-  if (config.addToScope) {
+  if (addToScope) {
     const settings = readJsonFile<any>(getSettingsPath()) ?? {};
-    const newModelRefs = newModels.map(name => `ollama/${name}`);
-    settings.enabledModels = [...new Set([...(settings.enabledModels ?? []), ...newModelRefs])];
+    const refs = added.map(name => `ollama/${name}`);
+    settings.enabledModels = [...new Set([...(settings.enabledModels ?? []), ...refs])];
     writeJsonFile(getSettingsPath(), settings);
   }
 
-  return {
-    added: newModels,
-    message: `Added ${newModels.length} new Ollama model(s). Run /reload to use them.`,
-    success: true,
-  };
+  return { added, message: `${added.length} Ollama model(s) synced.`, success: true };
 };

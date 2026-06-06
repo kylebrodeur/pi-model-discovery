@@ -1,34 +1,23 @@
-import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-
-export type ModelTier = 'high' | 'medium' | 'low';
-
-export interface TierConfig {
-  model: string;
-  thinking?: ThinkingLevel;
+export interface OllamaProviderConfig {
+  enabled?: boolean;
 }
 
-export interface ModelProfile {
-  high: TierConfig;
-  medium: TierConfig;
-  low: TierConfig;
+export interface ProviderConfigs {
+  ollama?: OllamaProviderConfig;
 }
 
 export interface ModelDiscoveryConfig {
-  defaultProfile?: string;
   debug?: boolean;
-  profiles: Record<string, ModelProfile>;
   syncOnStartup?: boolean;
   addToScope?: boolean;
+  providers?: ProviderConfigs;
 }
 
 export interface ModelDiscoveryState {
   enabled: boolean;
-  selectedProfile: string;
   debugEnabled: boolean;
-  widgetEnabled: boolean;
   timestamp: number;
 }
-
 
 export interface ConfigLoadResult {
   config: ModelDiscoveryConfig;
@@ -40,8 +29,8 @@ export interface ParsedConfigFile {
   warnings: string[];
 }
 
-export interface CustomSessionEntry {
-  type: string;
-  customType?: string;
-  data?: unknown;
+export interface SyncConfig {
+  syncOnStartup: boolean;
+  addToScope: boolean;
+  providers: ProviderConfigs;
 }
