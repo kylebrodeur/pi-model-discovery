@@ -1,5 +1,6 @@
 export interface OllamaProviderConfig {
   enabled?: boolean;
+  baseUrl?: string;
 }
 
 export interface ProviderConfigs {

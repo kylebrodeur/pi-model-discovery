@@ -35,15 +35,16 @@ export const registerCommands = (
   };
 
   const handleStatus = async (args: string[], ctx: ExtensionContext) => {
-    const providers = state.currentConfig.providers ?? {};
-    const ollamaEnabled = providers.ollama?.enabled !== false;
+    const ollamaCfg = state.currentConfig.providers?.ollama;
+    const ollamaEnabled = ollamaCfg?.enabled !== false;
+    const ollamaBaseUrl = ollamaCfg?.baseUrl ?? 'http://127.0.0.1:11434';
     const lines = [
       `Model Discovery Status:`,
       `Enabled: ${state.enabled ? 'yes' : 'off'}`,
       `Sync on startup: ${state.currentConfig.syncOnStartup ? 'yes' : 'no'}`,
       `Add to scope: ${state.currentConfig.addToScope ? 'yes' : 'no'}`,
       `Providers:`,
-      `  ollama: ${ollamaEnabled ? 'watching' : 'disabled'}`,
+      `  ollama: ${ollamaEnabled ? `watching (${ollamaBaseUrl})` : 'disabled'}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
     ];
     ctx.ui.notify(lines.join('\n'), 'info');
@@ -83,7 +84,7 @@ export const registerCommands = (
     const defaultConfig = {
       syncOnStartup: true,
       addToScope: true,
-      providers: { ollama: { enabled: true } },
+      providers: { ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' } },
     };
     writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
     ctx.ui.notify(`Created default config. Run /discovery reload to apply.`, 'info');

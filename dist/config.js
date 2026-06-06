@@ -8,7 +8,7 @@ exports.FALLBACK_CONFIG = {
     debug: false,
     syncOnStartup: true,
     addToScope: true,
-    providers: { ollama: { enabled: true } },
+    providers: { ollama: { enabled: true, baseUrl: 'http://127.0.0.1:11434' } },
 };
 const isObjectRecord = (value) => typeof value === 'object' && value !== null;
 const parseConfigFile = (path) => {

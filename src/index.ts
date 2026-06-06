@@ -6,7 +6,7 @@ import { updateStatus } from './ui';
 import { registerCommands } from './commands';
 import { performSync } from './sync';
 
-const modelDiscoveryExtension = (pi: ExtensionAPI) => {
+const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let currentConfig: ModelDiscoveryConfig = FALLBACK_CONFIG;
   let currentCwd = process.cwd();
   let debugEnabled = false;
@@ -31,6 +31,22 @@ const modelDiscoveryExtension = (pi: ExtensionAPI) => {
       if (ctx) actions.updateStatus(ctx);
     },
   };
+
+  // ── Startup sync (async factory - runs before session_start) ─────
+  actions.reloadConfig();
+
+  if (currentConfig.syncOnStartup) {
+    const result = await performSync(pi, {
+      syncOnStartup: true,
+      addToScope: currentConfig.addToScope ?? true,
+      providers: currentConfig.providers ?? {},
+    });
+    if (result.added.length > 0) {
+      console.log(`[Discovery] Registered ${result.added.length} Ollama model(s).`);
+    } else if (!result.success) {
+      console.log(`[Discovery] ${result.message}`);
+    }
+  }
 
   const restoreStateFromSession = async (ctx: ExtensionContext) => {
     currentCwd = ctx.cwd;
@@ -66,24 +82,7 @@ const modelDiscoveryExtension = (pi: ExtensionAPI) => {
 
   pi.on('session_start', async (_event, ctx) => {
     await restoreStateFromSession(ctx);
-
-    if (currentConfig.syncOnStartup) {
-      const providers = currentConfig.providers ?? {};
-      const result = await performSync(pi, {
-        syncOnStartup: true,
-        addToScope: currentConfig.addToScope ?? true,
-        providers,
-      });
-      if (result.added.length > 0) {
-        ctx.ui.notify(`[Discovery] Synced ${result.added.length} model(s). Run /reload.`, 'info');
-      } else if (!result.success) {
-        ctx.ui.notify(`[Discovery] ${result.message}`, 'warning');
-      }
-    }
-
-    if (debugEnabled) {
-      ctx.ui.notify(`Discovery initialized.`, 'info');
-    }
+    if (debugEnabled) ctx.ui.notify('Discovery initialized.', 'info');
   });
 };
 

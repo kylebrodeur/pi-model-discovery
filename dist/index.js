@@ -5,7 +5,7 @@ const state_1 = require("./state");
 const ui_1 = require("./ui");
 const commands_1 = require("./commands");
 const sync_1 = require("./sync");
-const modelDiscoveryExtension = (pi) => {
+const modelDiscoveryExtension = async (pi) => {
     let currentConfig = config_1.FALLBACK_CONFIG;
     let currentCwd = process.cwd();
     let debugEnabled = false;
@@ -31,6 +31,21 @@ const modelDiscoveryExtension = (pi) => {
                 actions.updateStatus(ctx);
         },
     };
+    // ── Startup sync (async factory - runs before session_start) ─────
+    actions.reloadConfig();
+    if (currentConfig.syncOnStartup) {
+        const result = await (0, sync_1.performSync)(pi, {
+            syncOnStartup: true,
+            addToScope: currentConfig.addToScope ?? true,
+            providers: currentConfig.providers ?? {},
+        });
+        if (result.added.length > 0) {
+            console.log(`[Discovery] Registered ${result.added.length} Ollama model(s).`);
+        }
+        else if (!result.success) {
+            console.log(`[Discovery] ${result.message}`);
+        }
+    }
     const restoreStateFromSession = async (ctx) => {
         currentCwd = ctx.cwd;
         actions.reloadConfig(ctx);
@@ -56,23 +71,8 @@ const modelDiscoveryExtension = (pi) => {
     }, actions);
     pi.on('session_start', async (_event, ctx) => {
         await restoreStateFromSession(ctx);
-        if (currentConfig.syncOnStartup) {
-            const providers = currentConfig.providers ?? {};
-            const result = await (0, sync_1.performSync)(pi, {
-                syncOnStartup: true,
-                addToScope: currentConfig.addToScope ?? true,
-                providers,
-            });
-            if (result.added.length > 0) {
-                ctx.ui.notify(`[Discovery] Synced ${result.added.length} model(s). Run /reload.`, 'info');
-            }
-            else if (!result.success) {
-                ctx.ui.notify(`[Discovery] ${result.message}`, 'warning');
-            }
-        }
-        if (debugEnabled) {
-            ctx.ui.notify(`Discovery initialized.`, 'info');
-        }
+        if (debugEnabled)
+            ctx.ui.notify('Discovery initialized.', 'info');
     });
 };
 exports.default = modelDiscoveryExtension;

@@ -4,40 +4,16 @@ import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import type { SyncConfig } from './types';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+interface OllamaTagEntry { name: string; model: string; size: number }
+interface OllamaTagsResponse { models: OllamaTagEntry[] }
 
-interface OllamaListEntry { name: string }
-interface ModelsJson {
-  providers: {
-    ollama?: { models: { id: string }[] };
-  };
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-const parseOllamaList = (output: string): OllamaListEntry[] =>
-  output.trim().split('\n').slice(1).map(line => ({ name: line.split(/\s+/)[0] }));
-
-const inferCapabilities = (modelName: string): Record<string, any> => {
+const inferCapabilities = (modelName: string): { reasoning?: boolean; input?: string[]; contextWindow?: number } => {
   const lower = modelName.toLowerCase();
-  const entry: Record<string, any> = { contextWindow: 128000 };
-  if (['vl', 'vision', 'ocr'].some(kw => lower.includes(kw))) entry.input = ['text', 'image'];
-  return entry;
+  const caps: { reasoning?: boolean; input?: string[]; contextWindow?: number } = { contextWindow: 128000 };
+  if (['vl', 'vision', 'ocr'].some(kw => lower.includes(kw))) caps.input = ['text', 'image'];
+  if (['thinking', 'reason', 'cascade', 'deepseek'].some(kw => lower.includes(kw))) caps.reasoning = true;
+  return caps;
 };
-
-const getSettingsPath = () => join(getAgentDir(), 'settings.json');
-const getModelsJsonPath = () => join(getAgentDir(), 'models.json');
-
-const readJsonFile = <T>(path: string): T | null => {
-  if (!existsSync(path)) return null;
-  try { return JSON.parse(readFileSync(path, 'utf-8')); } catch { return null; }
-};
-
-const writeJsonFile = (path: string, data: any): void => {
-  writeFileSync(path, JSON.stringify(data, null, 2));
-};
-
-// ─── Public API ─────────────────────────────────────────────────────────────
 
 export interface SyncResult {
   added: string[];
@@ -51,71 +27,74 @@ export const performSync = async (
 ): Promise<SyncResult> => {
   const results: SyncResult[] = [];
 
-  // ── Ollama provider ──────────────────────────────────────────────────
   if (config.providers.ollama?.enabled !== false) {
-    const result = await syncOllama(pi, config.addToScope);
-    results.push(result);
+    results.push(await syncOllama(pi, config.addToScope, config));
   }
 
-  // Combine results
   const totalAdded = results.flatMap(r => r.added);
   const scopeMsg = config.addToScope ? ' Scope updated.' : '';
-  if (totalAdded.length > 0) {
-    return {
-      added: totalAdded,
-      message: `Added ${totalAdded.length} new model(s): ${totalAdded.join(', ')}.${scopeMsg} Run /reload to use them.`,
-      success: true,
-    };
-  }
-
-  const allSucceeded = results.every(r => r.success);
-  if (!allSucceeded) {
+  if (!results.every(r => r.success)) {
     const failures = results.filter(r => !r.success);
     return { added: [], message: failures.map(f => f.message).join('; '), success: false };
   }
-
+  if (totalAdded.length > 0) {
+    return { added: totalAdded, message: `Registered ${totalAdded.length} model(s).${scopeMsg}`, success: true };
+  }
   return { added: [], message: `Already up to date.${scopeMsg}`, success: true };
 };
 
-// ─── Provider-specific sync ─────────────────────────────────────────────────
+const syncOllama = async (pi: ExtensionAPI, addToScope: boolean, config: SyncConfig): Promise<SyncResult> => {
+  const baseUrl = config.providers.ollama?.baseUrl ?? 'http://127.0.0.1:11434';
+  const apiUrl = baseUrl.replace(/\/$/, '') + '/api/tags';
 
-const syncOllama = async (pi: ExtensionAPI, addToScope: boolean): Promise<SyncResult> => {
-  let output: string;
+  let tags: OllamaTagsResponse;
   try {
-    const result = await pi.exec('ollama', ['list'], { timeout: 10000 });
-    if (result.code !== 0) return { added: [], message: 'Ollama not available', success: false };
-    output = result.stdout;
+    const res = await fetch(apiUrl);
+    if (!res.ok) return { added: [], message: `Ollama API returned ${res.status}`, success: false };
+    tags = await res.json() as OllamaTagsResponse;
   } catch {
-    return { added: [], message: 'Ollama not available', success: false };
+    return { added: [], message: `Ollama not reachable at ${baseUrl}`, success: false };
   }
 
-  const discovered = parseOllamaList(output);
-  if (discovered.length === 0) return { added: [], message: 'No Ollama models found', success: true };
+  if (!tags.models?.length) return { added: [], message: 'No Ollama models found', success: true };
 
-  const modelsJson = readJsonFile<ModelsJson>(getModelsJsonPath());
-  if (!modelsJson) return { added: [], message: 'models.json not found', success: false };
+  const models = tags.models.map(m => {
+    const caps = inferCapabilities(m.name);
+    return {
+      id: m.name,
+      name: m.name,
+      reasoning: caps.reasoning ?? false,
+      input: (caps.input ?? ['text']) as ('text' | 'image')[],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: caps.contextWindow ?? 128000,
+      maxTokens: 4096,
+    };
+  });
 
-  modelsJson.providers.ollama ??= { models: [] };
-  const existing = new Set(modelsJson.providers.ollama.models.map(m => m.id));
-  const added: string[] = [];
-
-  for (const m of discovered) {
-    if (!existing.has(m.name)) {
-      modelsJson.providers.ollama.models.push({ id: m.name, ...inferCapabilities(m.name) });
-      added.push(m.name);
-    }
-  }
-
-  if (added.length === 0) return { added: [], message: 'Ollama models up to date.', success: true };
-
-  writeJsonFile(getModelsJsonPath(), modelsJson);
+  pi.registerProvider('ollama', {
+    baseUrl: baseUrl + '/v1',
+    apiKey: 'ollama',
+    api: 'openai-completions',
+    models,
+  });
 
   if (addToScope) {
-    const settings = readJsonFile<any>(getSettingsPath()) ?? {};
-    const allOllamaRefs = modelsJson.providers.ollama!.models.map(m => `ollama/${m.id}`);
-    settings.enabledModels = [...new Set([...(settings.enabledModels ?? []), ...allOllamaRefs])];
-    writeJsonFile(getSettingsPath(), settings);
+    addOllamaToScope(models.map(m => m.id));
   }
 
-  return { added, message: `${added.length} Ollama model(s) synced.`, success: true };
+  return { added: models.map(m => m.id), message: `${models.length} Ollama model(s) registered.`, success: true };
+};
+
+const addOllamaToScope = (modelIds: string[]) => {
+  const settingsPath = join(getAgentDir(), 'settings.json');
+  let settings: Record<string, unknown> = {};
+  try {
+    if (existsSync(settingsPath)) {
+      settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    }
+  } catch { /* ignore */ }
+
+  const refs = modelIds.map(id => `ollama/${id}`);
+  settings.enabledModels = [...new Set([...(Array.isArray(settings.enabledModels) ? settings.enabledModels as string[] : []), ...refs])];
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
 };
