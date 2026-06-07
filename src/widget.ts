@@ -34,16 +34,15 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
   const { current, totalRegistered, thinkingLevel } = data;
 
   if (!current) {
-    return [theme.fg('muted', `○ no model · ${totalRegistered} ollama`)];
+    return [theme.fg('muted', `no model · ${totalRegistered} ollama`)];
   }
 
-  // Left: ◆ model-name · family · size · quant
+  // Left: model-name · family · size · quant
   const meta: string[] = [];
   if (current.family) meta.push(current.family);
   if (current.parameterSize) meta.push(current.parameterSize);
   if (current.quantization) meta.push(current.quantization);
   const left = [
-    theme.fg('accent', '◆'),
     theme.fg('accent', current.name),
     meta.length ? theme.fg('muted', `· ${meta.join(' · ')}`) : '',
   ].filter(Boolean).join(' ');
@@ -58,16 +57,16 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
     middle.push(theme.fg('muted', `think ${thinkingLevel}`));
   }
 
-  // Right: capability dots (only show on-state)
+  // Right: capability labels
   const caps: string[] = [];
-  if (current.vision) caps.push(theme.fg('success', '●vis'));
-  if (current.reasoning) caps.push(theme.fg('success', '●thi'));
-  if (current.tools) caps.push(theme.fg('success', '●tls'));
+  if (current.vision) caps.push(theme.fg('muted', 'vision'));
+  if (current.reasoning) caps.push(theme.fg('muted', 'thinking'));
+  if (current.tools) caps.push(theme.fg('muted', 'tools'));
 
   const parts = [
     left,
     middle.join(theme.fg('muted', ' · ')),
-    caps.length ? caps.join(' ') : theme.fg('dim', '○ no caps'),
+    caps.length ? caps.join(' ') : theme.fg('dim', ''),
   ];
 
   return [parts.filter(Boolean).join('   ')];
