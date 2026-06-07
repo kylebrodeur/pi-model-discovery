@@ -14,6 +14,8 @@ export interface ModelDiscoveryConfig {
   debug?: boolean;
   syncOnStartup?: boolean;
   addToScope?: boolean;
+  /** Show the below-editor widget with current model info. */
+  showWidget?: boolean;
   providers?: ProviderConfigs;
 }
 

@@ -32,6 +32,7 @@ pi update npm:@kylebrodeur/pi-model-discovery
 | `/providers sync` | Re-run the discovery sync (uses cache) |
 | `/providers sync --force` | Bypass the capability cache and refetch from Ollama |
 | `/providers info <model>` | Show context window, family, parameters, capabilities for a model (partial match) |
+| `/providers widget on/off` | Show or hide the below-editor widget |
 | `/providers init` | Create a default `local-providers.json` config file |
 | `/providers reload` | Reload config without restarting Pi |
 | `/providers debug on/off` | Toggle debug logging |
@@ -100,6 +101,7 @@ Config file: `~/.pi/agent/local-providers.json` (global) or `./.pi/local-provide
 | `debug` | boolean | `false` | Log extra info on session start |
 | `syncOnStartup` | boolean | `true` | Run discovery during the async factory (before `session_start`) |
 | `addToScope` | boolean | `true` | Push discovered models into `settings.json` `enabledModels` |
+| `showWidget` | boolean | `true` | Show the below-editor widget with current model info. Use `/providers widget off` to hide per-session. |
 
 ## Capability detection
 

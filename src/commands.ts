@@ -19,12 +19,15 @@ export const registerCommands = (
     updateStatus: (ctx: ExtensionContext) => void;
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => void;
     persistLastSync: (lastSync: ModelDiscoveryState['lastSync']) => void;
+    setShowWidget: (on: boolean) => void;
+    refreshWidget: () => void;
   },
 ) => {
   const SUBCOMMAND_DETAILS = [
     { name: 'status', desc: 'Show sync status and registered models' },
     { name: 'sync', desc: 'Sync local providers into pi configuration' },
     { name: 'info', desc: 'Show details for a specific model' },
+    { name: 'widget', desc: 'Toggle the below-editor widget on/off' },
     { name: 'debug', desc: 'Toggle debug logging' },
     { name: 'reload', desc: 'Reload configuration' },
     { name: 'init', desc: 'Create default config file' },
@@ -48,6 +51,7 @@ export const registerCommands = (
       `Sync on startup: ${state.currentConfig.syncOnStartup ? 'yes' : 'no'}`,
       `Add to scope: ${state.currentConfig.addToScope ? 'yes' : 'no'}`,
       `Cleanup stale: ${ollamaCfg?.cleanupStale ? 'yes' : 'no'}`,
+      `Widget: ${state.currentConfig.showWidget !== false ? 'shown' : 'hidden'}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
       ``,
       `Providers:`,
@@ -140,8 +144,7 @@ export const registerCommands = (
     ctx.ui.notify(`[Providers] ${result.message}${note}`, result.success ? 'info' : 'error');
   };
 
-  const handleDebug = async (args: string[], ctx: ExtensionContext) => {
-    const cmd = args[0]?.toLowerCase();
+  const handleDebug = async (args: string[], ctx: ExtensionContext) => {    const cmd = args[0]?.toLowerCase();
     if (cmd === 'on') state.debugEnabled = true;
     else if (cmd === 'off') state.debugEnabled = false;
     else state.debugEnabled = !state.debugEnabled;
@@ -152,6 +155,18 @@ export const registerCommands = (
   const handleReload = async (_args: string[], ctx: ExtensionContext) => {
     actions.reloadConfig(ctx, { preserveDebug: true });
     ctx.ui.notify(`Config reloaded.`, 'info');
+  };
+
+  const handleWidget = async (args: string[], ctx: ExtensionContext) => {
+    const current = state.currentConfig.showWidget !== false;
+    const cmd = args[0]?.toLowerCase();
+    let next: boolean;
+    if (cmd === 'on') next = true;
+    else if (cmd === 'off') next = false;
+    else next = !current;
+    actions.setShowWidget(next);
+    actions.refreshWidget();
+    ctx.ui.notify(`Widget ${next ? 'shown' : 'hidden'}.`, 'info');
   };
 
   const handleInit = async (args: string[], ctx: ExtensionContext) => {
@@ -192,6 +207,12 @@ export const registerCommands = (
         }));
         return items.length > 0 ? items : null;
       }
+      if (subcommand === 'widget') {
+        const items = ['on', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
+          value: `widget ${v}`, label: v,
+        }));
+        return items.length > 0 ? items : null;
+      }
       if (subcommand === 'sync') {
         const items = ['--force', '-f'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
           value: v, label: v, description: 'Bypass capability cache',
@@ -207,6 +228,7 @@ export const registerCommands = (
       switch (subcommand) {
         case 'sync': await handleSync(subArgs, ctx); break;
         case 'info': await handleInfo(subArgs, ctx); break;
+        case 'widget': await handleWidget(subArgs, ctx); break;
         case 'debug': await handleDebug(subArgs, ctx); break;
         case 'reload': await handleReload(subArgs, ctx); break;
         case 'init': await handleInit(subArgs, ctx); break;
@@ -217,6 +239,7 @@ export const registerCommands = (
              '  status             Show sync status and registered models with capabilities.',
              '  sync [--force]     Sync local providers. --force bypasses capability cache.',
              '  info <model>       Show details (context, capabilities) for a specific model.',
+             '  widget on/off      Show or hide the below-editor widget.',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
              '  init [--force]     Create or update config with current defaults. Use --force to reset.',

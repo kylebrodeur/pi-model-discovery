@@ -31,7 +31,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     const current = currentModelRef
       ? snapshotFromState(currentModelRef, { enabled, debugEnabled, lastSync, timestamp: 0 })
       : null;
-    return { current, totalRegistered: total, thinkingLevel };
+    return { current, totalRegistered: total, thinkingLevel, showWidget: currentConfig.showWidget };
   };
 
   const refreshWidget = () => {
@@ -46,6 +46,9 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       persist(buildPersistedState(enabled, debugEnabled, lastSync));
       refreshWidget();
     },
+    setShowWidget: (on: boolean) => {
+      currentConfig = { ...currentConfig, showWidget: on };
+    },
     updateStatus: (ctx: ExtensionContext) =>
       updateStatus(ctx, lastSync?.ollama?.modelIds.length ?? 0, ollamaReachable),
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => {
@@ -54,6 +57,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       if (!options?.preserveDebug) debugEnabled = currentConfig.debug ?? false;
       if (ctx) actions.updateStatus(ctx);
     },
+    refreshWidget,
   };
 
   // ── Startup sync (async factory - runs before session_start) ─────
@@ -114,6 +118,11 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   pi.on('session_start', async (_event, ctx) => {
     activeCtx = ctx;
     await restoreStateFromSession(ctx);
+
+    // Detect already-selected ollama model on startup (so widget shows immediately)
+    if (!currentModelRef && ctx.model && ctx.model.provider === 'ollama') {
+      currentModelRef = `ollama/${ctx.model.id}`;
+    }
 
     // Scope sync runs after Pi has settled, avoiding startup overwrite
     if (currentConfig.addToScope) {

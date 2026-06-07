@@ -25,6 +25,7 @@ export interface WidgetData {
   current: ModelSnapshot | null;
   totalRegistered: number;
   thinkingLevel: string | null;
+  showWidget?: boolean;
 }
 
 const formatContext = (n: number): string => {
@@ -118,6 +119,10 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
 };
 
 export const updateWidget = (ctx: ExtensionContext, data: WidgetData): void => {
+  if (data.showWidget === false) {
+    ctx.ui.setWidget('providers', undefined);
+    return;
+  }
   ctx.ui.setWidget(
     'providers',
     (_tui: unknown, theme: any) => ({
