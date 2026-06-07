@@ -11,6 +11,7 @@ export interface ModelSnapshot {
   tools: boolean;
   family?: string;
   parameterSize?: string;
+  quantization?: string;
 }
 
 export interface WidgetData {
@@ -25,30 +26,51 @@ const formatContext = (n: number): string => {
   return String(n);
 };
 
+/** A short tag describing what a model is good at, derived from its tags. */
+const capabilityTag = (m: ModelSnapshot): string => {
+  if (m.vision && m.reasoning) return 'multimodal · reasoning';
+  if (m.vision) return 'multimodal';
+  if (m.reasoning) return 'reasoning';
+  return 'text';
+};
+
 const renderWidget = (theme: any, data: WidgetData): string[] => {
   const { current, totalRegistered, thinkingLevel } = data;
 
   if (!current) {
-    return [theme.fg('muted', `○ local models: ${totalRegistered} registered`)];
+    return [
+      theme.fg('muted', '○ no model selected'),
+      theme.fg('muted', `  ${totalRegistered} ollama models registered`),
+    ];
   }
 
   const cap = (label: string, on: boolean): string =>
-    theme.fg(on ? 'success' : 'muted', `${on ? '●' : '○'} ${label}`);
+    theme.fg(on ? 'success' : 'dim', `${on ? '●' : '○'} ${label}`);
 
   const caps = [
     cap('vision', current.vision),
     cap('thinking', current.reasoning),
     cap('tools', current.tools),
-  ].join('  ');
+  ].join('   ');
 
+  // Line 1: model name + family + size + quantization
+  const meta: string[] = [];
+  if (current.family) meta.push(current.family);
+  if (current.parameterSize) meta.push(current.parameterSize);
+  if (current.quantization) meta.push(current.quantization);
+  const metaText = meta.length ? theme.fg('muted', `  ·  ${meta.join(' · ')}`) : '';
+
+  // Line 2: context + thinking + tag
   const ctxText = `ctx: ${formatContext(current.contextWindow)}`;
-  const familyText = current.family ? theme.fg('muted', ` · ${current.family}`) : '';
-  const sizeText = current.parameterSize ? theme.fg('muted', ` · ${current.parameterSize}`) : '';
-  const thinkText = thinkingLevel ? theme.fg('accent', ` · thinking: ${thinkingLevel}`) : '';
+  const thinkText = thinkingLevel
+    ? theme.fg('accent', `   thinking: ${thinkingLevel}`)
+    : '';
+  const tagText = theme.fg('muted', `   ·   ${capabilityTag(current)}`);
 
   return [
-    `${theme.fg('accent', current.name)}${familyText}${sizeText}`,
-    `${theme.fg('muted', ctxText)}${thinkText}    ${caps}`,
+    `${theme.fg('accent', '◆ ')}${theme.fg('accent', current.name)}${metaText}`,
+    `${theme.fg('muted', ctxText)}${thinkText}${tagText}`,
+    caps,
   ];
 };
 
@@ -91,5 +113,6 @@ export const snapshotFromState = (
     tools: ollama.tools.includes(id),
     family: ollama.families[id],
     parameterSize: ollama.parameterSizes[id],
+    quantization: ollama.quantizations[id],
   };
 };

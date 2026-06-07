@@ -16,6 +16,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let lastPersistedSnapshot: string | undefined;
   let currentModelRef: string | null = null;
   let thinkingLevel: string | null = null;
+  let ollamaReachable = false;
   let activeCtx: ExtensionContext | null = null;
 
   const persist = (state: ModelDiscoveryState) => {
@@ -45,7 +46,8 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       persist(buildPersistedState(enabled, debugEnabled, lastSync));
       refreshWidget();
     },
-    updateStatus: (ctx: ExtensionContext) => updateStatus(ctx, enabled),
+    updateStatus: (ctx: ExtensionContext) =>
+      updateStatus(ctx, lastSync?.ollama?.modelIds.length ?? 0, ollamaReachable),
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => {
       const loaded = loadModelDiscoveryConfig(currentCwd);
       currentConfig = loaded.config;
@@ -66,6 +68,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     if (result.capabilities) {
       lastSync = result.capabilities;
     }
+    ollamaReachable = result.success;
     if (result.added.length > 0) {
       console.log(`[Providers] Registered ${result.added.length} Ollama model(s).`);
     } else if (!result.success) {
@@ -123,11 +126,13 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
         lastSync = result.capabilities;
         actions.persistState();
       }
+      ollamaReachable = result.success || ollamaReachable;
       if (result.success && result.added.length > 0) {
         ctx.ui.notify(`[Providers] Scope updated with ${result.added.length} model(s).`, 'info');
       }
     }
 
+    actions.updateStatus(ctx);
     refreshWidget();
     if (debugEnabled) ctx.ui.notify('Providers initialized.', 'info');
   });

@@ -99,12 +99,13 @@ export const registerCommands = (
         : String(ctx2);
     const lines = [
       `ollama/${id}`,
-      `  context:    ${fmtCtx} tokens`,
-      `  family:     ${ollama.families[id] ?? 'unknown'}`,
-      `  parameters: ${ollama.parameterSizes[id] ?? 'unknown'}`,
-      `  vision:     ${ollama.vision.includes(id) ? 'yes' : 'no'}`,
-      `  thinking:   ${ollama.reasoning.includes(id) ? 'yes' : 'no'}`,
-      `  tools:      ${ollama.tools.includes(id) ? 'yes' : 'no'}`,
+      `  context:     ${fmtCtx} tokens`,
+      `  family:      ${ollama.families[id] ?? 'unknown'}`,
+      `  parameters:  ${ollama.parameterSizes[id] ?? 'unknown'}`,
+      `  quant:       ${ollama.quantizations[id] ?? 'unknown'}`,
+      `  vision:      ${ollama.vision.includes(id) ? 'yes' : 'no'}`,
+      `  thinking:    ${ollama.reasoning.includes(id) ? 'yes' : 'no'}`,
+      `  tools:       ${ollama.tools.includes(id) ? 'yes' : 'no'}`,
     ];
     ctx.ui.notify(lines.join('\n'), 'info');
   };

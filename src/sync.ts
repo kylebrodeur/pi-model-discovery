@@ -30,6 +30,7 @@ export interface ModelCapabilities {
   contextWindow: number;
   parameterSize?: string;
   family?: string;
+  quantization?: string;
 }
 
 /**
@@ -75,6 +76,7 @@ export const capabilitiesFromShow = (
     contextWindow,
     parameterSize: show.details?.parameter_size,
     family: show.details?.family,
+    quantization: show.details?.quantization_level,
   };
 };
 
@@ -91,6 +93,7 @@ export interface SyncResult {
       contextWindows: Record<string, number>;
       families: Record<string, string>;
       parameterSizes: Record<string, string>;
+      quantizations: Record<string, string>;
     };
   };
 }
@@ -153,7 +156,7 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
   }
 
   if (!tags.models?.length) {
-    return { added: [], message: 'No Ollama models found', success: true, capabilities: { ollama: { modelIds: [], vision: [], reasoning: [], tools: [], contextWindows: {}, families: {}, parameterSizes: {} } } };
+    return { added: [], message: 'No Ollama models found', success: true, capabilities: { ollama: { modelIds: [], vision: [], reasoning: [], tools: [], contextWindows: {}, families: {}, parameterSizes: {}, quantizations: {} } } };
   }
 
   // Resolve capabilities: cache first, fetch /api/show for cache misses
@@ -190,6 +193,7 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
   const contextWindows: Record<string, number> = {};
   const families: Record<string, string> = {};
   const parameterSizes: Record<string, string> = {};
+  const quantizations: Record<string, string> = {};
 
   const models = tags.models.map((m) => {
     const caps = cache[m.name];
@@ -200,6 +204,7 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
     contextWindows[m.name] = caps.contextWindow;
     if (caps.family) families[m.name] = caps.family;
     if (caps.parameterSize) parameterSizes[m.name] = caps.parameterSize;
+    if (caps.quantization) quantizations[m.name] = caps.quantization;
 
     const displayName = caps.parameterSize
       ? `${m.name} (${caps.parameterSize})`
@@ -234,7 +239,7 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
     added: modelIds,
     message: `${modelIds.length} Ollama model(s) registered.`,
     success: true,
-    capabilities: { ollama: { modelIds, vision, reasoning, tools, contextWindows, families, parameterSizes } },
+    capabilities: { ollama: { modelIds, vision, reasoning, tools, contextWindows, families, parameterSizes, quantizations } },
   };
 };
 

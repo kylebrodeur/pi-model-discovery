@@ -29,6 +29,7 @@ export interface ModelDiscoveryState {
       contextWindows: Record<string, number>;
       families: Record<string, string>;
       parameterSizes: Record<string, string>;
+      quantizations: Record<string, string>;
     };
   };
   timestamp: number;
