@@ -144,14 +144,21 @@ export const performSync = async (
 
   const totalAdded = results.flatMap(r => r.added);
   const scopeMsg = config.addToScope ? ' Scope updated.' : '';
+  // Aggregate capabilities from all successful provider results
+  const capabilities: SyncResult['capabilities'] = {};
+  for (const r of results) {
+    if (r.success && r.capabilities) {
+      Object.assign(capabilities, r.capabilities);
+    }
+  }
   if (!results.every(r => r.success)) {
     const failures = results.filter(r => !r.success);
     return { added: [], message: failures.map(f => f.message).join('; '), success: false };
   }
   if (totalAdded.length > 0) {
-    return { added: totalAdded, message: `Registered ${totalAdded.length} model(s).${scopeMsg}`, success: true };
+    return { added: totalAdded, message: `Registered ${totalAdded.length} model(s).${scopeMsg}`, success: true, capabilities };
   }
-  return { added: [], message: `Already up to date.${scopeMsg}`, success: true };
+  return { added: [], message: `Already up to date.${scopeMsg}`, success: true, capabilities };
 };
 
 const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncResult> => {
