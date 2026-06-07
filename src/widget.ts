@@ -9,9 +9,16 @@ export interface ModelSnapshot {
   vision: boolean;
   reasoning: boolean;
   tools: boolean;
+  embedding: boolean;
+  remote: boolean;
+  qat: boolean;
   family?: string;
   parameterSize?: string;
   quantization?: string;
+  format?: string;
+  size?: number;
+  digest?: string;
+  modifiedAt?: string;
 }
 
 export interface WidgetData {
@@ -26,8 +33,29 @@ const formatContext = (n: number): string => {
   return String(n);
 };
 
-const dot = (theme: any, on: boolean, label: string): string =>
-  theme.fg(on ? 'success' : 'dim', `${on ? '●' : '○'}`) + theme.fg(on ? 'success' : 'dim', label);
+const formatSize = (bytes: number): string => {
+  if (bytes <= 0) return '';
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)}G`;
+  if (bytes >= 1_000_000) return `${Math.round(bytes / 1_000_000)}M`;
+  if (bytes >= 1_000) return `${Math.round(bytes / 1_000)}K`;
+  return String(bytes);
+};
+
+const shortDigest = (digest: string): string =>
+  digest ? digest.slice(0, 7) : '';
+
+const relativeTime = (iso: string): string => {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return '';
+  const seconds = Math.floor((Date.now() - then) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d ago`;
+  if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo ago`;
+  return `${Math.floor(seconds / 31536000)}y ago`;
+};
 
 /** Compact single-line widget. */
 const renderWidget = (theme: any, data: WidgetData): string[] => {
@@ -42,9 +70,17 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
   if (current.family) meta.push(current.family);
   if (current.parameterSize) meta.push(current.parameterSize);
   if (current.quantization) meta.push(current.quantization);
+  if (current.format && current.format !== 'gguf') meta.push(current.format);
+
+  const tags: string[] = [];
+  if (current.remote) tags.push(theme.fg('accent', 'cloud'));
+  if (current.qat) tags.push(theme.fg('accent', 'qat'));
+  if (current.embedding) tags.push(theme.fg('accent', 'embed'));
+
   const left = [
     theme.fg('accent', current.name),
     meta.length ? theme.fg('muted', `· ${meta.join(' · ')}`) : '',
+    tags.length ? theme.fg('muted', `· ${tags.join(' · ')}`) : '',
   ].filter(Boolean).join(' ');
 
   // Middle: ctx · thinking
@@ -56,6 +92,9 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
   } else if (thinkingLevel) {
     middle.push(theme.fg('muted', `think ${thinkingLevel}`));
   }
+  if (current.size) {
+    middle.push(theme.fg('muted', formatSize(current.size)));
+  }
 
   // Right: capability labels
   const caps: string[] = [];
@@ -63,10 +102,16 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
   if (current.reasoning) caps.push(theme.fg('muted', 'thinking'));
   if (current.tools) caps.push(theme.fg('muted', 'tools'));
 
+  // Trailing: digest (truncated) + modified time, when local
+  const trail: string[] = [];
+  if (current.digest) trail.push(shortDigest(current.digest));
+  if (current.modifiedAt && !current.remote) trail.push(relativeTime(current.modifiedAt));
+
   const parts = [
     left,
     middle.join(theme.fg('muted', ' · ')),
-    caps.length ? caps.join(' ') : theme.fg('dim', ''),
+    caps.length ? caps.join(' ') : '',
+    trail.length ? theme.fg('dim', trail.join(' ')) : '',
   ];
 
   return [parts.filter(Boolean).join('   ')];
@@ -109,8 +154,15 @@ export const snapshotFromState = (
     vision: ollama.vision.includes(id),
     reasoning: ollama.reasoning.includes(id),
     tools: ollama.tools.includes(id),
+    embedding: ollama.embedding?.includes(id) ?? false,
+    remote: ollama.remote?.includes(id) ?? false,
+    qat: ollama.qat?.includes(id) ?? false,
     family: ollama.families[id],
     parameterSize: ollama.parameterSizes[id],
     quantization: ollama.quantizations[id],
+    format: ollama.formats?.[id],
+    size: ollama.sizes?.[id],
+    digest: ollama.digests?.[id],
+    modifiedAt: ollama.modifiedAt?.[id],
   };
 };

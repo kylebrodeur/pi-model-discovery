@@ -8,75 +8,95 @@ import {
   updateCacheEntry, dropStaleCacheEntries,
 } from './cache';
 
-interface OllamaTagEntry { name: string; model: string; size: number }
-interface OllamaTagsResponse { models: OllamaTagEntry[] }
-
-interface OllamaShowDetails {
+interface OllamaTagDetails {
+  parent_model?: string;
+  format?: string;
   family?: string;
+  families?: string[];
   parameter_size?: string;
   quantization_level?: string;
+  context_length?: number;
+  embedding_length?: number;
 }
 
-interface OllamaShowResponse {
-  capabilities?: string[];   // e.g. ["completion", "vision", "tools", "thinking"]
-  details?: OllamaShowDetails;
-  model_info?: Record<string, unknown>;
+interface OllamaTagEntry {
+  name: string;
+  model: string;
+  modified_at: string;
+  size: number;
+  digest: string;
+  details?: OllamaTagDetails;
+  capabilities?: string[];
+  /** Cloud/remote model fields (Ollama 0.30+) */
+  remote_model?: string;
+  remote_host?: string;
+}
+
+interface OllamaTagsResponse {
+  models: OllamaTagEntry[];
 }
 
 export interface ModelCapabilities {
   vision: boolean;
   reasoning: boolean;
   tools: boolean;
+  embedding: boolean;
+  imageGeneration: boolean;
   contextWindow: number;
   parameterSize?: string;
   family?: string;
   quantization?: string;
+  format?: string;
+  size: number;
+  digest: string;
+  modifiedAt: string;
+  /** True if the model is hosted remotely (Ollama cloud or other). */
+  remote: boolean;
+  remoteHost?: string;
+  /** True for Quantization-Aware Training variants (e.g. gemma4:12b-it-qat). */
+  qat: boolean;
 }
 
-/**
- * Heuristic fallback for capability inference when /api/show is unavailable.
- * Used only as a last resort.
- */
+const detectQat = (name: string): boolean => name.toLowerCase().endsWith('-qat');
+
 export const inferCapabilitiesFromName = (modelName: string): ModelCapabilities => {
   const lower = modelName.toLowerCase();
   return {
     vision: ['vl', 'vision', 'ocr'].some(kw => lower.includes(kw)),
     reasoning: ['thinking', 'reason', 'cascade', 'deepseek-r1', '-r1', 'qwq'].some(kw => lower.includes(kw)),
     tools: true,
+    embedding: lower.includes('embed'),
+    imageGeneration: false,
     contextWindow: 128000,
+    size: 0,
+    digest: '',
+    modifiedAt: '',
+    remote: lower.includes(':cloud'),
+    qat: detectQat(modelName),
   };
 };
 
-/**
- * Pull capabilities from an /api/show response. Falls back to name heuristics
- * if the response is missing fields.
- */
-export const capabilitiesFromShow = (
-  modelName: string,
-  show: OllamaShowResponse | null,
-): ModelCapabilities => {
-  if (!show) return inferCapabilitiesFromName(modelName);
-  const caps = show.capabilities ?? [];
-  const info = show.model_info ?? {};
-
-  // context_length lives under the architecture key, e.g. model_info.llama.context_length
-  // Walk the object looking for any key ending in `.context_length`.
-  let contextWindow = 0;
-  for (const [key, value] of Object.entries(info)) {
-    if (key.endsWith('.context_length') && typeof value === 'number') {
-      contextWindow = Math.max(contextWindow, value);
-    }
-  }
-  if (contextWindow === 0) contextWindow = 128000;
-
+/** Build a capability snapshot directly from /api/tags (no /api/show call). */
+export const capabilitiesFromTag = (tag: OllamaTagEntry): ModelCapabilities => {
+  const caps = tag.capabilities ?? [];
+  const d = tag.details;
   return {
     vision: caps.includes('vision'),
     reasoning: caps.includes('thinking') || caps.includes('reasoning'),
     tools: caps.includes('tools'),
-    contextWindow,
-    parameterSize: show.details?.parameter_size,
-    family: show.details?.family,
-    quantization: show.details?.quantization_level,
+    embedding: caps.includes('embedding'),
+    imageGeneration: caps.includes('image-generation') || caps.includes('image'),
+    contextWindow: d?.context_length ?? 0,
+    parameterSize: d?.parameter_size,
+    family: d?.family,
+    quantization: d?.quantization_level,
+    format: d?.format,
+    size: tag.size ?? 0,
+    digest: tag.digest ?? '',
+    modifiedAt: tag.modified_at ?? '',
+    remote: !!tag.remote_model,
+    remoteHost: tag.remote_host,
+    qat: detectQat(tag.name),
   };
 };
 
@@ -90,27 +110,20 @@ export interface SyncResult {
       vision: string[];
       reasoning: string[];
       tools: string[];
+      embedding: string[];
+      remote: string[];
+      qat: string[];
       contextWindows: Record<string, number>;
       families: Record<string, string>;
       parameterSizes: Record<string, string>;
       quantizations: Record<string, string>;
+      formats: Record<string, string>;
+      sizes: Record<string, number>;
+      digests: Record<string, string>;
+      modifiedAt: Record<string, string>;
     };
   };
 }
-
-const fetchOllamaShow = async (baseUrl: string, modelName: string): Promise<OllamaShowResponse | null> => {
-  try {
-    const res = await fetch(`${baseUrl}/api/show`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: modelName }),
-    });
-    if (!res.ok) return null;
-    return await res.json() as OllamaShowResponse;
-  } catch {
-    return null;
-  }
-};
 
 export interface SyncOptions {
   syncOnStartup?: boolean;
@@ -156,44 +169,60 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
   }
 
   if (!tags.models?.length) {
-    return { added: [], message: 'No Ollama models found', success: true, capabilities: { ollama: { modelIds: [], vision: [], reasoning: [], tools: [], contextWindows: {}, families: {}, parameterSizes: {}, quantizations: {} } } };
+    return {
+      added: [],
+      message: 'No Ollama models found',
+      success: true,
+      capabilities: {
+        ollama: {
+          modelIds: [], vision: [], reasoning: [], tools: [], embedding: [], remote: [], qat: [],
+          contextWindows: {}, families: {}, parameterSizes: {}, quantizations: {}, formats: {},
+          sizes: {}, digests: {}, modifiedAt: {},
+        },
+      },
+    };
   }
 
-  // Resolve capabilities: cache first, fetch /api/show for cache misses
+  // Ollama 0.30+ returns all the data we need in /api/tags. We still use the
+  // cache layer for resilience when the server is briefly unreachable.
   const cache = readCache();
   const liveModelIds = new Set(tags.models.map(m => m.name));
   const needsFetch: string[] = [];
 
   for (const m of tags.models) {
-    if (config.forceRefresh) {
-      needsFetch.push(m.name);
-    } else if (!isCacheValid(cache[m.name], ttlHours)) {
+    if (config.forceRefresh || !isCacheValid(cache[m.name], ttlHours)) {
       needsFetch.push(m.name);
     }
   }
 
   if (needsFetch.length > 0) {
-    const fetched = await Promise.all(needsFetch.map(n => fetchOllamaShow(baseUrl, n)));
-    for (let i = 0; i < needsFetch.length; i++) {
-      const caps = capabilitiesFromShow(needsFetch[i], fetched[i]);
-      updateCacheEntry(cache, needsFetch[i], caps);
+    for (const name of needsFetch) {
+      const tag = tags.models.find(m => m.name === name);
+      if (tag) updateCacheEntry(cache, name, capabilitiesFromTag(tag));
     }
   }
 
-  // Drop cache entries for models that no longer exist in Ollama
   dropStaleCacheEntries(cache, liveModelIds);
   if (needsFetch.length > 0 || Object.keys(cache).length !== liveModelIds.size) {
     writeCache(cache);
   }
 
+  // Build capability lists + per-model maps from the cache (always current).
   const modelIds: string[] = [];
   const vision: string[] = [];
   const reasoning: string[] = [];
   const tools: string[] = [];
+  const embedding: string[] = [];
+  const remote: string[] = [];
+  const qat: string[] = [];
   const contextWindows: Record<string, number> = {};
   const families: Record<string, string> = {};
   const parameterSizes: Record<string, string> = {};
   const quantizations: Record<string, string> = {};
+  const formats: Record<string, string> = {};
+  const sizes: Record<string, number> = {};
+  const digests: Record<string, string> = {};
+  const modifiedAt: Record<string, string> = {};
 
   const models = tags.models.map((m) => {
     const caps = cache[m.name];
@@ -201,10 +230,17 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
     if (caps.vision) vision.push(m.name);
     if (caps.reasoning) reasoning.push(m.name);
     if (caps.tools) tools.push(m.name);
+    if (caps.embedding) embedding.push(m.name);
+    if (caps.remote) remote.push(m.name);
+    if (caps.qat) qat.push(m.name);
     contextWindows[m.name] = caps.contextWindow;
     if (caps.family) families[m.name] = caps.family;
     if (caps.parameterSize) parameterSizes[m.name] = caps.parameterSize;
     if (caps.quantization) quantizations[m.name] = caps.quantization;
+    if (caps.format) formats[m.name] = caps.format;
+    if (caps.size) sizes[m.name] = caps.size;
+    if (caps.digest) digests[m.name] = caps.digest;
+    if (caps.modifiedAt) modifiedAt[m.name] = caps.modifiedAt;
 
     const displayName = caps.parameterSize
       ? `${m.name} (${caps.parameterSize})`
@@ -239,7 +275,13 @@ const syncOllama = async (pi: ExtensionAPI, config: SyncOptions): Promise<SyncRe
     added: modelIds,
     message: `${modelIds.length} Ollama model(s) registered.`,
     success: true,
-    capabilities: { ollama: { modelIds, vision, reasoning, tools, contextWindows, families, parameterSizes, quantizations } },
+    capabilities: {
+      ollama: {
+        modelIds, vision, reasoning, tools, embedding, remote, qat,
+        contextWindows, families, parameterSizes, quantizations, formats,
+        sizes, digests, modifiedAt,
+      },
+    },
   };
 };
 

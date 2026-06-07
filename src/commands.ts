@@ -83,7 +83,6 @@ export const registerCommands = (
       ctx.ui.notify('No sync has run yet this session.', 'warning');
       return;
     }
-    // Allow partial match
     const id = ollama.modelIds.find(
       (m) => m === modelId || m.includes(modelId),
     );
@@ -97,12 +96,28 @@ export const registerCommands = (
       : ctx2 >= 1_000
         ? `${Math.round(ctx2 / 1_000)}K`
         : String(ctx2);
+    const size = ollama.sizes?.[id] ?? 0;
+    const fmtSize = size >= 1_000_000_000
+      ? `${(size / 1_000_000_000).toFixed(1)} GB`
+      : size >= 1_000_000
+        ? `${Math.round(size / 1_000_000)} MB`
+        : size > 0 ? `${size} B` : '-';
+    const isRemote = ollama.remote?.includes(id);
+    const isQat = ollama.qat?.includes(id);
+    const tags = [
+      isRemote ? 'cloud' : '',
+      isQat ? 'qat' : '',
+      ollama.embedding?.includes(id) ? 'embed' : '',
+    ].filter(Boolean).join(' · ');
     const lines = [
-      `ollama/${id}`,
+      `ollama/${id}${tags ? `  (${tags})` : ''}`,
       `  context:     ${fmtCtx} tokens`,
       `  family:      ${ollama.families[id] ?? 'unknown'}`,
       `  parameters:  ${ollama.parameterSizes[id] ?? 'unknown'}`,
       `  quant:       ${ollama.quantizations[id] ?? 'unknown'}`,
+      `  format:      ${ollama.formats?.[id] ?? 'unknown'}`,
+      `  size:        ${fmtSize}`,
+      `  digest:      ${ollama.digests?.[id]?.slice(0, 12) ?? '-'}`,
       `  vision:      ${ollama.vision.includes(id) ? 'yes' : 'no'}`,
       `  thinking:    ${ollama.reasoning.includes(id) ? 'yes' : 'no'}`,
       `  tools:       ${ollama.tools.includes(id) ? 'yes' : 'no'}`,

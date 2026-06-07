@@ -26,10 +26,17 @@ export interface ModelDiscoveryState {
       vision: string[];
       reasoning: string[];
       tools: string[];
+      embedding: string[];
+      remote: string[];
+      qat: string[];
       contextWindows: Record<string, number>;
       families: Record<string, string>;
       parameterSizes: Record<string, string>;
       quantizations: Record<string, string>;
+      formats: Record<string, string>;
+      sizes: Record<string, number>;
+      digests: Record<string, string>;
+      modifiedAt: Record<string, string>;
     };
   };
   timestamp: number;

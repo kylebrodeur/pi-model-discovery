@@ -42,11 +42,10 @@ pi update npm:@kylebrodeur/pi-model-discovery
 A persistent indicator below the editor shows the current model's metadata and updates live as you switch models or change thinking level:
 
 ```
-gemma4:12b · gemma4 · 12B
-ctx: 262K · thinking: medium    ● vision  ● thinking  ● tools
+gemma4:12b · gemma4 · 12B · Q4_K_M   ctx 262K   vision thinking tools   4eb23ef 2d ago
 ```
 
-When no model is selected, shows: `○ local models: 21 registered`.
+Cloud models show a `cloud` tag, QAT variants show `qat`, embedding models show `embed`. Local models also show disk size and relative modified time. When no model is selected, shows: `no model · 21 ollama`.
 
 `/providers status` output looks like:
 
@@ -104,15 +103,17 @@ Config file: `~/.pi/agent/local-providers.json` (global) or `./.pi/local-provide
 
 ## Capability detection
 
-The extension reads each model's `/api/show` response to extract:
+Starting with Ollama 0.30, all metadata is available directly from `/api/tags` — no separate `/api/show` call needed:
 
-- **context window** — from `model_info.<arch>.context_length` (1M+ for models that support it)
+- **context window** — from `details.context_length` (1M+ for models that support it)
 - **vision** — from `capabilities: ["vision"]`
 - **reasoning** — from `capabilities: ["thinking"]` or `["reasoning"]`
 - **tools** — from `capabilities: ["tools"]`
-- **parameter size / family** — for the displayed model name
-
-If `/api/show` is unavailable, it falls back to name-based heuristics (e.g. `vl`, `vision`, `ocr` → vision; `thinking`, `r1`, `qwq` → reasoning).
+- **embedding** — from `capabilities: ["embedding"]`
+- **parameter size, family, quantization, format** — from `details.*`
+- **size, digest, modified_at** — from top-level tag fields
+- **remote/cloud** — when `remote_model`/`remote_host` are set
+- **QAT** — detected from `-qat` suffix (Gemma 4 quantization-aware training)
 
 ## Cache
 

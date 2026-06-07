@@ -11,22 +11,42 @@ export type CapabilityCache = Record<string, CachedEntry>;
 
 const CACHE_FILENAME = 'ollama-model-cache.json';
 const DEFAULT_TTL_HOURS = 24;
+/** Bump when ModelCapabilities shape changes so old caches get re-fetched. */
+const CACHE_VERSION = 2;
+
+interface VersionedCache {
+  version: number;
+  entries: CapabilityCache;
+}
 
 export const getCachePath = (): string => join(getAgentDir(), CACHE_FILENAME);
 
-export const readCache = (): CapabilityCache => {
+const readVersioned = (): VersionedCache | null => {
   const path = getCachePath();
-  if (!existsSync(path)) return {};
+  if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as CapabilityCache;
+    const raw = JSON.parse(readFileSync(path, 'utf-8'));
+    // Handle both new versioned format and legacy flat format
+    if (typeof raw === 'object' && raw !== null && 'version' in raw) {
+      return raw as VersionedCache;
+    }
+    return { version: 1, entries: raw as CapabilityCache };
   } catch {
-    return {};
+    return null;
   }
 };
 
+export const readCache = (): CapabilityCache => {
+  const v = readVersioned();
+  if (!v) return {};
+  if (v.version !== CACHE_VERSION) return {}; // version mismatch → rebuild
+  return v.entries;
+};
+
 export const writeCache = (cache: CapabilityCache): void => {
+  const wrapped: VersionedCache = { version: CACHE_VERSION, entries: cache };
   try {
-    writeFileSync(getCachePath(), JSON.stringify(cache, null, 2));
+    writeFileSync(getCachePath(), JSON.stringify(wrapped, null, 2));
   } catch { /* best-effort */ }
 };
 
