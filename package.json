@@ -1,6 +1,6 @@
 {
   "name": "@kylebrodeur/pi-model-discovery",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Auto-discover local model providers (Ollama) and register their models with Pi on startup. Per-model context windows and capabilities, no /reload required.",
   "main": "dist/index.js",
   "files": [
