@@ -26,52 +26,51 @@ const formatContext = (n: number): string => {
   return String(n);
 };
 
-/** A short tag describing what a model is good at, derived from its tags. */
-const capabilityTag = (m: ModelSnapshot): string => {
-  if (m.vision && m.reasoning) return 'multimodal · reasoning';
-  if (m.vision) return 'multimodal';
-  if (m.reasoning) return 'reasoning';
-  return 'text';
-};
+const dot = (theme: any, on: boolean, label: string): string =>
+  theme.fg(on ? 'success' : 'dim', `${on ? '●' : '○'}`) + theme.fg(on ? 'success' : 'dim', label);
 
+/** Compact single-line widget. */
 const renderWidget = (theme: any, data: WidgetData): string[] => {
   const { current, totalRegistered, thinkingLevel } = data;
 
   if (!current) {
-    return [
-      theme.fg('muted', '○ no model selected'),
-      theme.fg('muted', `  ${totalRegistered} ollama models registered`),
-    ];
+    return [theme.fg('muted', `○ no model · ${totalRegistered} ollama`)];
   }
 
-  const cap = (label: string, on: boolean): string =>
-    theme.fg(on ? 'success' : 'dim', `${on ? '●' : '○'} ${label}`);
-
-  const caps = [
-    cap('vision', current.vision),
-    cap('thinking', current.reasoning),
-    cap('tools', current.tools),
-  ].join('   ');
-
-  // Line 1: model name + family + size + quantization
+  // Left: ◆ model-name · family · size · quant
   const meta: string[] = [];
   if (current.family) meta.push(current.family);
   if (current.parameterSize) meta.push(current.parameterSize);
   if (current.quantization) meta.push(current.quantization);
-  const metaText = meta.length ? theme.fg('muted', `  ·  ${meta.join(' · ')}`) : '';
+  const left = [
+    theme.fg('accent', '◆'),
+    theme.fg('accent', current.name),
+    meta.length ? theme.fg('muted', `· ${meta.join(' · ')}`) : '',
+  ].filter(Boolean).join(' ');
 
-  // Line 2: context + thinking + tag
-  const ctxText = `ctx: ${formatContext(current.contextWindow)}`;
-  const thinkText = thinkingLevel
-    ? theme.fg('accent', `   thinking: ${thinkingLevel}`)
-    : '';
-  const tagText = theme.fg('muted', `   ·   ${capabilityTag(current)}`);
-
-  return [
-    `${theme.fg('accent', '◆ ')}${theme.fg('accent', current.name)}${metaText}`,
-    `${theme.fg('muted', ctxText)}${thinkText}${tagText}`,
-    caps,
+  // Middle: ctx · thinking
+  const middle: string[] = [
+    theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`),
   ];
+  if (thinkingLevel && current.reasoning) {
+    middle.push(theme.fg('accent', `think ${thinkingLevel}`));
+  } else if (thinkingLevel) {
+    middle.push(theme.fg('muted', `think ${thinkingLevel}`));
+  }
+
+  // Right: capability dots (only show on-state)
+  const caps: string[] = [];
+  if (current.vision) caps.push(theme.fg('success', '●vis'));
+  if (current.reasoning) caps.push(theme.fg('success', '●thi'));
+  if (current.tools) caps.push(theme.fg('success', '●tls'));
+
+  const parts = [
+    left,
+    middle.join(theme.fg('muted', ' · ')),
+    caps.length ? caps.join(' ') : theme.fg('dim', '○ no caps'),
+  ];
+
+  return [parts.filter(Boolean).join('   ')];
 };
 
 export const updateWidget = (ctx: ExtensionContext, data: WidgetData): void => {
