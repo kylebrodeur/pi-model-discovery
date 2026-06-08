@@ -16,6 +16,8 @@ export interface ModelDiscoveryConfig {
   addToScope?: boolean;
   /** Show the footer status indicator with capabilities + context. Default: true. */
   showFooterStatus?: boolean;
+  /** Show the "Caps:" label before the capability icons in the footer. Default: true. */
+  showCapLabels?: boolean;
   providers?: ProviderConfigs;
 }
 

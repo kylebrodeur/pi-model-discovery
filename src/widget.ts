@@ -55,37 +55,45 @@ const relativeTime = (iso: string): string => {
 };
 
 /** Single-line footer status. Only shows what pi doesn't already display. */
-export const buildStatus = (theme: any, data: StatusData): string => {
+export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean = true): string => {
   const { current } = data;
   if (!current) return '';
 
-  const parts: string[] = [];
+  // Variant icons (cloud / qat / embedding)
+  const variantIcons: string[] = [];
+  if (current.remote) variantIcons.push(theme.fg('accent', '☁'));
+  if (current.qat) variantIcons.push(theme.fg('success', '⚡'));
+  if (current.embedding) variantIcons.push(theme.fg('muted', '◇'));
 
-  // Status icons (just the icon, no text)
-  if (current.remote) parts.push(theme.fg('accent', '☁'));
-  if (current.qat) parts.push(theme.fg('success', '⚡'));
-  if (current.embedding) parts.push(theme.fg('muted', '◇'));
-
-  // Capabilities: icons only, dim when off, accent when on, with spacing
+  // Capability icons (dim when off, success when on)
   const cap = (icon: string, on: boolean): string =>
     on ? theme.fg('success', icon) : theme.fg('dim', icon);
-  const caps = [
+  const capIcons = [
     cap('◉', current.vision),      // eye / vision
     cap('◆', current.reasoning),   // diamond / thinking
     cap('⏵', current.tools),       // play / tools
   ].join(' ');
 
-  // Context window: icon + ":" + value, matching pi's stat-row convention
+  // Stats: context window (and disk size for local models)
+  const statParts: string[] = [];
   if (current.contextWindow > 0) {
-    parts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
+    statParts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
   }
-
-  // Disk size for local models: icon + ":" + value
   if (current.size && !current.remote) {
-    parts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
+    statParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
-  return parts.join('  ');
+  // Assemble: variantIcons • Caps: capIcons • statParts (uniform single-space + middot)
+  const middot = theme.fg('dim', '•');
+  const pieces: string[] = [];
+  if (variantIcons.length) pieces.push(variantIcons.join(' '));
+  if (variantIcons.length) pieces.push(middot);
+  pieces.push(showCapLabels ? `${theme.fg('muted', 'Caps:')} ${capIcons}` : capIcons);
+  if (statParts.length) {
+    pieces.push(middot);
+    pieces.push(statParts.join(' '));
+  }
+  return pieces.join(' ');
 };
 
 /** Multi-line model card content for the popup. */

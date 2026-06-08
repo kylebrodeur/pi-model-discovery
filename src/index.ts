@@ -44,6 +44,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
         thinkingLevel,
       },
       currentConfig.showFooterStatus !== false,
+      currentConfig.showCapLabels !== false,
     );
   };
 
@@ -57,6 +58,9 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     },
     setShowFooterStatus: (on: boolean) => {
       currentConfig = { ...currentConfig, showFooterStatus: on };
+    },
+    setShowCapLabels: (on: boolean) => {
+      currentConfig = { ...currentConfig, showCapLabels: on };
     },
     updateStatus: (_ctx: ExtensionContext) => refreshStatus(),
     refreshStatus,
