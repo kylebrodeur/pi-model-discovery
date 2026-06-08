@@ -1,3 +1,4 @@
+import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { ModelDiscoveryState } from './types';
 
@@ -58,15 +59,15 @@ const relativeTime = (iso: string): string => {
   return `${Math.floor(seconds / 31536000)}y ago`;
 };
 
-/** Compact single-line widget. */
-const renderWidget = (theme: any, data: WidgetData): string[] => {
+/** Build a single pre-colored line for the below-editor widget. */
+const buildWidgetLines = (ctx: ExtensionContext, data: WidgetData): string[] => {
   const { current, totalRegistered, thinkingLevel } = data;
+  const theme = ctx.ui.theme;
 
   if (!current) {
     return [theme.fg('muted', `no model · ${totalRegistered} ollama`)];
   }
 
-  // Left: model-name · family · size · quant
   const meta: string[] = [];
   if (current.family) meta.push(current.family);
   if (current.parameterSize) meta.push(current.parameterSize);
@@ -84,7 +85,6 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
     tags.length ? theme.fg('muted', `· ${tags.join(' · ')}`) : '',
   ].filter(Boolean).join(' ');
 
-  // Middle: ctx · thinking
   const middle: string[] = [
     theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`),
   ];
@@ -97,13 +97,11 @@ const renderWidget = (theme: any, data: WidgetData): string[] => {
     middle.push(theme.fg('muted', formatSize(current.size)));
   }
 
-  // Right: capability labels
   const caps: string[] = [];
   if (current.vision) caps.push(theme.fg('muted', 'vision'));
   if (current.reasoning) caps.push(theme.fg('muted', 'thinking'));
   if (current.tools) caps.push(theme.fg('muted', 'tools'));
 
-  // Trailing: digest (truncated) + modified time, when local
   const trail: string[] = [];
   if (current.digest) trail.push(shortDigest(current.digest));
   if (current.modifiedAt && !current.remote) trail.push(relativeTime(current.modifiedAt));
@@ -123,10 +121,13 @@ export const updateWidget = (ctx: ExtensionContext, data: WidgetData): void => {
     ctx.ui.setWidget('providers', undefined);
     return;
   }
+  // Use the render function form so we can truncate lines to the terminal width.
+  const lines = buildWidgetLines(ctx, data);
   ctx.ui.setWidget(
     'providers',
-    (_tui: unknown, theme: any) => ({
-      render: (_width: number) => renderWidget(theme, data),
+    (_tui, _theme) => ({
+      render: (width: number) =>
+        lines.map(line => truncateToWidth(line, width)),
       invalidate: () => {},
     }),
     { placement: 'belowEditor' },
