@@ -110,11 +110,12 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   }
 
   // Assemble:
-  //   Model: [location]   [type]  [caps]  [stats]
+  //   Model: [location]  [type]  [caps]  [stats]
   // - "Model:" prefix shown only when labels are hidden (otherwise self-evident)
-  // - triple-space after location (clear visual separation)
+  // - single-space between location and type (they're related attributes)
   // - double-space between caps and stats
   // - double-space between stats items
+  // - no extra padding after location (icons are visually distinct enough)
   // "Caps:" label is only shown when cap labels are hidden (icons alone are ambiguous)
   const capSection = showCapLabelText ? capIcons : `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const locationSection = locationParts.join(' ');
@@ -123,12 +124,8 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   if (!showLocationLabels && !showCapLabelText) {
     sections.push(theme.fg('dim', 'Model:'));
   }
-  if (locationSection) {
-    sections.push(locationSection + (typeSection || capSection || statParts.length ? '   ' : ''));
-  }
-  if (typeSection) {
-    sections.push(typeSection);
-  }
+  if (locationSection) sections.push(locationSection);
+  if (typeSection) sections.push(typeSection);
   if (capSection) sections.push(capSection);
   sections.push(...statParts);
   return sections.filter(s => s.length > 0).join('  ');
