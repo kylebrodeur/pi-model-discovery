@@ -68,9 +68,9 @@ export const buildStatus = (theme: any, data: StatusData): string => {
 
   // Capabilities (active only)
   const caps: string[] = [];
-  if (current.vision) caps.push(theme.fg('success', 'vis'));
-  if (current.reasoning) caps.push(theme.fg('success', 'thi'));
-  if (current.tools) caps.push(theme.fg('success', 'tls'));
+  if (current.vision) caps.push(theme.fg('success', 'vision'));
+  if (current.reasoning) caps.push(theme.fg('success', 'thinking'));
+  if (current.tools) caps.push(theme.fg('success', 'tools'));
   if (caps.length) parts.push(caps.join(' '));
 
   // Context window (not usage % - that's already in pi's footer)

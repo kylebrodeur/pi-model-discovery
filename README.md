@@ -44,7 +44,7 @@ pi update npm:@kylebrodeur/pi-model-discovery
 A compact indicator in pi's footer that complements (not duplicates) the built-in model display. It shows only what pi doesn't already show — capabilities and special variant badges, plus context window size:
 
 ```
-☁ vis thi tls  ctx 524K
+☁ vision thinking tools  ctx 524K
 ```
 
 - `☁` cloud/remote model
