@@ -77,6 +77,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       if (!options?.preserveDebug) debugEnabled = currentConfig.debug ?? false;
       if (ctx) refreshStatus();
     },
+    getCurrentConfig: () => currentConfig,
   };
 
   // ── Startup sync (async factory - runs before session_start) ─────

@@ -25,6 +25,7 @@ export const registerCommands = (
     setShowCapLabelText: (on: boolean) => void;
     setShowLocationLabels: (on: boolean) => void;
     refreshStatus: () => void;
+    getCurrentConfig: () => ModelDiscoveryConfig;
   },
 ) => {
   const SUBCOMMAND_DETAILS = [
@@ -245,9 +246,12 @@ export const registerCommands = (
     const hasExisting = Object.keys(existing).length > 0;
 
     if (hasExisting && !force) {
-      const merged = mergeConfig(FALLBACK_CONFIG, existing);
+      // Merge current in-memory config (with all current toggles/values) into existing file
+      // This saves the user's current effective settings AND adds any new fields
+      const current = actions.getCurrentConfig();
+      const merged = mergeConfig(FALLBACK_CONFIG, { ...existing, ...current });
       writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf-8');
-      ctx.ui.notify(`Updated existing config with new defaults. Run /providers reload to apply.`, 'info');
+      ctx.ui.notify(`Saved current config. Run /providers reload to apply.`, 'info');
       return;
     }
 
