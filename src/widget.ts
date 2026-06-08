@@ -100,9 +100,10 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   //   [location] [type]  Caps: [caps]  [stats]
   // single-space between location and type (closely related model attributes)
   // double-space between broader sections
-  const capsSection = `${theme.fg('muted', 'Caps:')} ${capIcons}`;
+  // "Caps:" label is only shown when cap labels are hidden (icons alone are ambiguous)
+  const capSection = showCapLabelText ? capIcons : `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const locationAndType = [...locationParts, ...typeParts].filter(s => s.length > 0).join(' ');
-  const otherSections = [capsSection, ...statParts].filter(s => s.length > 0);
+  const otherSections = [capSection, ...statParts].filter(s => s.length > 0);
   return [locationAndType, ...otherSections].filter(s => s.length > 0).join('  ');
 };
 
