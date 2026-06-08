@@ -59,12 +59,18 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   const { current } = data;
   if (!current) return '';
 
-  // Location icons (cloud / qat / embedding) — describe where the model lives
+  // Location: cloud icon for remote (local has no icon, disk size serves as the marker)
   // All use single-width unicode glyphs so spacing stays consistent
-  const locationIcons: string[] = [];
-  if (current.remote) locationIcons.push(theme.fg('accent', '☁'));
-  if (current.qat) locationIcons.push(theme.fg('success', '✦'));
-  if (current.embedding) locationIcons.push(theme.fg('muted', '◇'));
+  const locationParts: string[] = [];
+  if (current.remote) locationParts.push(theme.fg('accent', '☁'));
+
+  // Type: model variants like QAT or embedding
+  const typeParts: string[] = [];
+  if (current.qat) typeParts.push(theme.fg('success', '✦'));
+  if (current.embedding) typeParts.push(theme.fg('muted', '◇'));
+  if (current.parameterSize) {
+    typeParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
+  }
 
   // Capability icons (dim when off, success when on)
   // Optionally with text labels: "vision ◉" or just "◉"
@@ -80,12 +86,6 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
     capLabel('⏵', current.tools, 'tools'),
   ].join(' ');
 
-  // Type info: parameter size
-  const typeParts: string[] = [];
-  if (current.parameterSize) {
-    typeParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
-  }
-
   // Stats: context window, disk size (local only)
   const statParts: string[] = [];
   if (current.contextWindow > 0) {
@@ -98,7 +98,7 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   // Assemble: [location]  Caps: [caps]  [type]  [stats]  (double-space between sections)
   const capsSection = `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const sections = [
-    locationIcons.join(' '),
+    ...locationParts,
     capsSection,
     ...typeParts,
     ...statParts,
