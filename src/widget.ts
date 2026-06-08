@@ -60,17 +60,18 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   if (!current) return '';
 
   // Location: cloud OR local disk size (mutually exclusive markers)
-  // Optionally with text labels: "☁ cloud" or just "☁"
-  const locLabel = (icon: string, label: string, dimColor: 'muted' | 'dim' = 'muted'): string => {
-    const styledIcon = theme.fg('accent', icon);
+  // Optionally with text labels: "☁ cloud" / "▽ local" or just the icon
+  const locLabel = (icon: string, label: string, color: 'accent' | 'success' | 'muted' | 'dim' = 'muted'): string => {
+    const styledIcon = theme.fg(color, icon);
     if (!showLocationLabels) return styledIcon;
-    return `${styledIcon}${theme.fg(dimColor, ' ' + label)}`;
+    return `${styledIcon}${theme.fg(color, ' ' + label)}`;
   };
   const locationParts: string[] = [];
   if (current.remote) {
-    locationParts.push(locLabel('☁', 'cloud'));
+    locationParts.push(locLabel('☁', 'cloud', 'accent'));
   } else if (current.size) {
-    // Disk size — always shows the size text, no label needed
+    // Local model — icon + "local" label, then disk size
+    locationParts.push(locLabel('▽', 'local', 'dim'));
     locationParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
