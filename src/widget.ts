@@ -66,26 +66,26 @@ export const buildStatus = (theme: any, data: StatusData): string => {
   if (current.qat) parts.push(theme.fg('success', '⚡'));
   if (current.embedding) parts.push(theme.fg('muted', '◇'));
 
-  // Capabilities: icons only, dim when off, accent when on
+  // Capabilities: icons only, dim when off, accent when on, with spacing
   const cap = (icon: string, on: boolean): string =>
     on ? theme.fg('success', icon) : theme.fg('dim', icon);
   const caps = [
     cap('◉', current.vision),      // eye / vision
     cap('◆', current.reasoning),   // diamond / thinking
     cap('⏵', current.tools),       // play / tools
-  ].join('');
+  ].join(' ');
 
-  // Context window (not usage % - that's already in pi's footer)
+  // Context window: icon + ":" + value, matching pi's stat-row convention
   if (current.contextWindow > 0) {
-    parts.push(theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`));
+    parts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
   }
 
-  // Disk size for local models
+  // Disk size for local models: icon + ":" + value
   if (current.size && !current.remote) {
-    parts.push(theme.fg('dim', formatSize(current.size)));
+    parts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
-  return parts.join(' ');
+  return parts.join('  ');
 };
 
 /** Multi-line model card content for the popup. */
