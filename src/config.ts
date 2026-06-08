@@ -15,8 +15,8 @@ export const FALLBACK_CONFIG: ModelDiscoveryConfig = {
   syncOnStartup: true,
   addToScope: true,
   showFooterStatus: true,
-  showCapLabelText: false,
-  showLocationLabels: false,
+  showCapLabelText: true,
+  showLocationLabels: true,
   providers: { ollama: FALLBACK_OLLAMA },
 };
 

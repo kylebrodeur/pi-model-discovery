@@ -70,7 +70,10 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     refreshStatus,
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => {
       const loaded = loadModelDiscoveryConfig(currentCwd);
-      currentConfig = loaded.config;
+      // Merge with the previous in-memory config so toggles (labels on/off, etc.)
+      // are not reset when the user runs /providers reload.
+      const previous = currentConfig;
+      currentConfig = { ...previous, ...loaded.config };
       if (!options?.preserveDebug) debugEnabled = currentConfig.debug ?? false;
       if (ctx) refreshStatus();
     },
