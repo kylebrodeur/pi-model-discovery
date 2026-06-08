@@ -97,14 +97,25 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   }
 
   // Assemble:
-  //   [location] [type]  Caps: [caps]  [stats]
+  //   [location]   [type]  [caps]  [stats]
   // single-space between location and type (closely related model attributes)
+  // triple-space AFTER location (location is the most important section, give it room)
   // double-space between broader sections
   // "Caps:" label is only shown when cap labels are hidden (icons alone are ambiguous)
   const capSection = showCapLabelText ? capIcons : `${theme.fg('muted', 'Caps:')} ${capIcons}`;
-  const locationAndType = [...locationParts, ...typeParts].filter(s => s.length > 0).join(' ');
-  const otherSections = [capSection, ...statParts].filter(s => s.length > 0);
-  return [locationAndType, ...otherSections].filter(s => s.length > 0).join('  ');
+  const locationSection = locationParts.join(' ');
+  const typeSection = typeParts.join(' ');
+  const sections: string[] = [];
+  if (locationSection) {
+    // location gets a trailing triple-space (or more) for visual prominence
+    sections.push(locationSection + (typeSection || capSection || statParts.length ? '   ' : ''));
+  }
+  if (typeSection) {
+    sections.push(typeSection);
+  }
+  if (capSection) sections.push(capSection);
+  sections.push(...statParts);
+  return sections.filter(s => s.length > 0).join('  ');
 };
 
 /** Multi-line model card content for the popup. */
