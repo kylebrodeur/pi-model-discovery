@@ -59,6 +59,12 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean
   const { current } = data;
   if (!current) return '';
 
+  // Variant icons first (cloud / qat / embedding) — these describe the model type
+  const variantIcons: string[] = [];
+  if (current.remote) variantIcons.push(theme.fg('accent', '☁'));
+  if (current.qat) variantIcons.push(theme.fg('success', '⚡'));
+  if (current.embedding) variantIcons.push(theme.fg('muted', '◇'));
+
   // Capability icons (dim when off, success when on)
   const cap = (icon: string, on: boolean): string =>
     on ? theme.fg('success', icon) : theme.fg('dim', icon);
@@ -68,7 +74,7 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean
     cap('⏵', current.tools),       // play / tools
   ].join(' ');
 
-  // Stats: parameter size, context window, disk size, then variant
+  // Stats: parameter size, context window, disk size (local only)
   const statParts: string[] = [];
   if (current.parameterSize) {
     statParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
@@ -76,19 +82,18 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean
   if (current.contextWindow > 0) {
     statParts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
   }
-  // For local models, disk size; for cloud models, cloud icon
   if (current.size && !current.remote) {
     statParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
-  } else if (current.remote) {
-    statParts.push(theme.fg('accent', '☁'));
   }
-  if (current.qat) statParts.push(theme.fg('success', '⚡'));
-  if (current.embedding) statParts.push(theme.fg('muted', '◇'));
 
-  // Assemble: caps section then stats, with pipe separators and consistent spacing
-  const sep = theme.fg('dim', '|');
+  // Assemble: [variants]  [caps]  [stat1]  [stat2]  (double-space between sections)
   const capsSection = showCapLabels ? `${theme.fg('muted', 'Caps:')} ${capIcons}` : capIcons;
-  return [capsSection, ...statParts].join(` ${sep} `);
+  const sections = [
+    variantIcons.join(' '),
+    capsSection,
+    ...statParts,
+  ].filter(s => s.length > 0);
+  return sections.join('  ');
 };
 
 /** Multi-line model card content for the popup. */
