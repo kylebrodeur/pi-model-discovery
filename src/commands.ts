@@ -5,6 +5,7 @@ import type { AutocompleteItem } from '@earendil-works/pi-tui';
 import type { ModelDiscoveryConfig, ModelDiscoveryState } from './types';
 import { FALLBACK_CONFIG, mergeConfig, parseConfigFile } from './config';
 import { performSync } from './sync';
+import { buildCard, snapshotFromState, type ModelSnapshot } from './widget';
 
 export const registerCommands = (
   pi: ExtensionAPI,
@@ -13,21 +14,23 @@ export const registerCommands = (
     enabled: boolean;
     debugEnabled: boolean;
     lastSync: ModelDiscoveryState['lastSync'];
+    currentModelRef: string | null;
   },
   actions: {
     persistState: () => void;
     updateStatus: (ctx: ExtensionContext) => void;
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => void;
     persistLastSync: (lastSync: ModelDiscoveryState['lastSync']) => void;
-    setShowWidget: (mode: boolean | 'rich' | 'minimal') => void;
-    refreshWidget: () => void;
+    setShowFooterStatus: (on: boolean) => void;
+    refreshStatus: () => void;
   },
 ) => {
   const SUBCOMMAND_DETAILS = [
     { name: 'status', desc: 'Show sync status and registered models' },
     { name: 'sync', desc: 'Sync local providers into pi configuration' },
     { name: 'info', desc: 'Show details for a specific model' },
-    { name: 'widget', desc: 'Toggle the below-editor widget on/off' },
+    { name: 'card', desc: 'Open the model card popup for the current model' },
+    { name: 'footer', desc: 'Toggle the footer status indicator' },
     { name: 'debug', desc: 'Toggle debug logging' },
     { name: 'reload', desc: 'Reload configuration' },
     { name: 'init', desc: 'Create default config file' },
@@ -41,6 +44,30 @@ export const registerCommands = (
     return items.length > 0 ? items : null;
   };
 
+  const getCurrentSnapshot = (): ModelSnapshot | null => {
+    if (!state.currentModelRef) return null;
+    return snapshotFromState(state.currentModelRef, {
+      enabled: state.enabled,
+      debugEnabled: state.debugEnabled,
+      lastSync: state.lastSync,
+      timestamp: 0,
+    });
+  };
+
+  const openCard = async (ctx: ExtensionContext, snapshot: ModelSnapshot | null) => {
+    if (!snapshot) {
+      ctx.ui.notify('No model selected.', 'warning');
+      return;
+    }
+    const text = buildCard(ctx.ui.theme, snapshot, {
+      enabled: state.enabled,
+      debugEnabled: state.debugEnabled,
+      lastSync: state.lastSync,
+      timestamp: 0,
+    });
+    await ctx.ui.editor(`${snapshot.name} (Esc to close)`, text);
+  };
+
   const handleStatus = async (_args: string[], ctx: ExtensionContext) => {
     const ollamaCfg = state.currentConfig.providers?.ollama;
     const ollamaEnabled = ollamaCfg?.enabled !== false;
@@ -51,7 +78,7 @@ export const registerCommands = (
       `Sync on startup: ${state.currentConfig.syncOnStartup ? 'yes' : 'no'}`,
       `Add to scope: ${state.currentConfig.addToScope ? 'yes' : 'no'}`,
       `Cleanup stale: ${ollamaCfg?.cleanupStale ? 'yes' : 'no'}`,
-      `Widget: ${state.currentConfig.showWidget === false ? 'hidden' : state.currentConfig.showWidget === 'minimal' ? 'minimal' : 'rich'}`,
+      `Footer status: ${state.currentConfig.showFooterStatus !== false ? 'on' : 'off'}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
       ``,
       `Providers:`,
@@ -78,55 +105,51 @@ export const registerCommands = (
 
   const handleInfo = async (args: string[], ctx: ExtensionContext) => {
     const modelId = args[0];
-    if (!modelId) {
-      ctx.ui.notify('Usage: /providers info <model-id-or-name>', 'warning');
-      return;
-    }
     const ollama = state.lastSync?.ollama;
     if (!ollama) {
       ctx.ui.notify('No sync has run yet this session.', 'warning');
       return;
     }
-    const id = ollama.modelIds.find(
-      (m) => m === modelId || m.includes(modelId),
-    );
+    let id: string | undefined;
+    if (modelId) {
+      id = ollama.modelIds.find(
+        (m) => m === modelId || m.includes(modelId),
+      );
+    } else {
+      // Default: current model
+      const ref = state.currentModelRef;
+      if (ref) {
+        const slash = ref.indexOf('/');
+        id = slash >= 0 ? ref.slice(slash + 1) : ref;
+      }
+    }
     if (!id) {
-      ctx.ui.notify(`Model "${modelId}" not found. Try /providers status.`, 'error');
+      ctx.ui.notify(modelId
+        ? `Model "${modelId}" not found. Try /providers status.`
+        : 'No current model. Use /providers info <model>.', 'error');
       return;
     }
-    const ctx2 = ollama.contextWindows[id] ?? 0;
-    const fmtCtx = ctx2 >= 1_000_000
-      ? `${(ctx2 / 1_000_000).toFixed(1)}M`
-      : ctx2 >= 1_000
-        ? `${Math.round(ctx2 / 1_000)}K`
-        : String(ctx2);
-    const size = ollama.sizes?.[id] ?? 0;
-    const fmtSize = size >= 1_000_000_000
-      ? `${(size / 1_000_000_000).toFixed(1)} GB`
-      : size >= 1_000_000
-        ? `${Math.round(size / 1_000_000)} MB`
-        : size > 0 ? `${size} B` : '-';
-    const isRemote = ollama.remote?.includes(id);
-    const isQat = ollama.qat?.includes(id);
-    const tags = [
-      isRemote ? 'cloud' : '',
-      isQat ? 'qat' : '',
-      ollama.embedding?.includes(id) ? 'embed' : '',
-    ].filter(Boolean).join(' · ');
-    const lines = [
-      `ollama/${id}${tags ? `  (${tags})` : ''}`,
-      `  context:     ${fmtCtx} tokens`,
-      `  family:      ${ollama.families[id] ?? 'unknown'}`,
-      `  parameters:  ${ollama.parameterSizes[id] ?? 'unknown'}`,
-      `  quant:       ${ollama.quantizations[id] ?? 'unknown'}`,
-      `  format:      ${ollama.formats?.[id] ?? 'unknown'}`,
-      `  size:        ${fmtSize}`,
-      `  digest:      ${ollama.digests?.[id]?.slice(0, 12) ?? '-'}`,
-      `  vision:      ${ollama.vision.includes(id) ? 'yes' : 'no'}`,
-      `  thinking:    ${ollama.reasoning.includes(id) ? 'yes' : 'no'}`,
-      `  tools:       ${ollama.tools.includes(id) ? 'yes' : 'no'}`,
-    ];
-    ctx.ui.notify(lines.join('\n'), 'info');
+    const snapshot = snapshotFromState(`ollama/${id}`, {
+      enabled: state.enabled,
+      debugEnabled: state.debugEnabled,
+      lastSync: state.lastSync,
+      timestamp: 0,
+    });
+    if (!snapshot) {
+      ctx.ui.notify(`Model "${id}" not found.`, 'error');
+      return;
+    }
+    const text = buildCard(ctx.ui.theme, snapshot, {
+      enabled: state.enabled,
+      debugEnabled: state.debugEnabled,
+      lastSync: state.lastSync,
+      timestamp: 0,
+    });
+    ctx.ui.notify(text, 'info');
+  };
+
+  const handleCard = async (_args: string[], ctx: ExtensionContext) => {
+    await openCard(ctx, getCurrentSnapshot());
   };
 
   const handleSync = async (args: string[], ctx: ExtensionContext) => {
@@ -144,7 +167,8 @@ export const registerCommands = (
     ctx.ui.notify(`[Providers] ${result.message}${note}`, result.success ? 'info' : 'error');
   };
 
-  const handleDebug = async (args: string[], ctx: ExtensionContext) => {    const cmd = args[0]?.toLowerCase();
+  const handleDebug = async (args: string[], ctx: ExtensionContext) => {
+    const cmd = args[0]?.toLowerCase();
     if (cmd === 'on') state.debugEnabled = true;
     else if (cmd === 'off') state.debugEnabled = false;
     else state.debugEnabled = !state.debugEnabled;
@@ -157,22 +181,16 @@ export const registerCommands = (
     ctx.ui.notify(`Config reloaded.`, 'info');
   };
 
-  const handleWidget = async (args: string[], ctx: ExtensionContext) => {
+  const handleFooter = async (args: string[], ctx: ExtensionContext) => {
     const cmd = args[0]?.toLowerCase();
-    const current = state.currentConfig.showWidget;
-    let next: boolean | 'rich' | 'minimal';
-    if (cmd === 'on' || cmd === 'rich') next = 'rich';
+    const current = state.currentConfig.showFooterStatus !== false;
+    let next: boolean;
+    if (cmd === 'on') next = true;
     else if (cmd === 'off') next = false;
-    else if (cmd === 'minimal' || cmd === 'min') next = 'minimal';
-    else if (cmd === 'toggle') next = current === false ? 'rich' : false;
-    else {
-      // No arg: cycle rich -> minimal -> off -> rich
-      next = current === 'rich' ? 'minimal' : current === 'minimal' ? false : 'rich';
-    }
-    actions.setShowWidget(next);
-    actions.refreshWidget();
-    const label = next === false ? 'hidden' : next === 'minimal' ? 'minimal' : 'rich';
-    ctx.ui.notify(`Widget: ${label}.`, 'info');
+    else next = !current;
+    actions.setShowFooterStatus(next);
+    actions.refreshStatus();
+    ctx.ui.notify(`Footer status: ${next ? 'on' : 'off'}.`, 'info');
   };
 
   const handleInit = async (args: string[], ctx: ExtensionContext) => {
@@ -213,9 +231,9 @@ export const registerCommands = (
         }));
         return items.length > 0 ? items : null;
       }
-      if (subcommand === 'widget') {
-        const items = ['rich', 'minimal', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
-          value: `widget ${v}`, label: v,
+      if (subcommand === 'footer') {
+        const items = ['on', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
+          value: `footer ${v}`, label: v,
         }));
         return items.length > 0 ? items : null;
       }
@@ -234,7 +252,8 @@ export const registerCommands = (
       switch (subcommand) {
         case 'sync': await handleSync(subArgs, ctx); break;
         case 'info': await handleInfo(subArgs, ctx); break;
-        case 'widget': await handleWidget(subArgs, ctx); break;
+        case 'card': await handleCard(subArgs, ctx); break;
+        case 'footer': await handleFooter(subArgs, ctx); break;
         case 'debug': await handleDebug(subArgs, ctx); break;
         case 'reload': await handleReload(subArgs, ctx); break;
         case 'init': await handleInit(subArgs, ctx); break;
@@ -244,8 +263,9 @@ export const registerCommands = (
             ['Providers Commands:',
              '  status             Show sync status and registered models with capabilities.',
              '  sync [--force]     Sync local providers. --force bypasses capability cache.',
-             '  info <model>       Show details (context, capabilities) for a specific model.',
-             '  widget [mode]       Cycle or set widget mode: rich (default), minimal, off.',
+             '  info [model]       Show details for a model (defaults to current).',
+             '  card               Open the model card popup for the current model.',
+             '  footer on/off      Toggle the footer status indicator.',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
              '  init [--force]     Create or update config with current defaults. Use --force to reset.',
@@ -257,6 +277,14 @@ export const registerCommands = (
           else await handleStatus(subArgs, ctx);
           break;
       }
+    },
+  });
+
+  // Keyboard shortcut: ctrl+i opens the model card for the current model
+  pi.registerShortcut('ctrl+i', {
+    description: 'Open model card for current model',
+    handler: async (ctx) => {
+      await openCard(ctx, getCurrentSnapshot());
     },
   });
 };

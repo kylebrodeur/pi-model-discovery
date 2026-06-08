@@ -31,47 +31,50 @@ pi update npm:@kylebrodeur/pi-model-discovery
 | `/providers status` | Show current config, registered models, and capability counts |
 | `/providers sync` | Re-run the discovery sync (uses cache) |
 | `/providers sync --force` | Bypass the capability cache and refetch from Ollama |
-| `/providers info <model>` | Show context window, family, parameters, capabilities for a model (partial match) |
-| `/providers widget [mode]` | Cycle or set widget: `rich` (default), `minimal`, `off` |
+| `/providers info [model]` | Show model card (defaults to current model) |
+| `/providers card` | Open the model card popup for the current model |
+| `/providers footer on/off` | Toggle the footer status indicator |
 | `/providers init` | Create a default `local-providers.json` config file |
 | `/providers reload` | Reload config without restarting Pi |
 | `/providers debug on/off` | Toggle debug logging |
 | `/providers help` | Show command help |
 
-## Widget
+## Footer status
 
-A persistent indicator below the editor shows the current model's metadata and updates live as you switch models or change thinking level.
-
-**Rich mode (default)** — two lines with everything:
+A compact indicator in pi's footer that complements (not duplicates) the built-in model display. It shows only what pi doesn't already show — capabilities and special variant badges, plus context window size:
 
 ```
-◈ minimax-m3:cloud · minimax-m3 · 550B · ☁ cloud   synced 2m ago · 21 ollama
-● vision   ● thinking   ● tools   ctx 524K · 384B on disk   ⚡ high   d03a959 1d
+☁ vis thi tls  ctx 524K
 ```
 
-**Minimal mode** — one line, matches pi's built-in footer style:
+- `☁` cloud/remote model
+- `⚡` QAT (Quantization-Aware Training, e.g. Gemma 4)
+- `◇` embedding model
+- `vis thi tls` — vision / thinking / tools (green = supported)
+- `ctx 524K` — context window size (not usage; pi's bar shows usage)
+
+Toggle with `/providers footer on/off` or set in config.
+
+## Model card popup
+
+Full details for the current model, opened as a popup. Triggered by:
+
+- **Keyboard shortcut**: `ctrl+i`
+- **Slash command**: `/providers card` (current model) or `/providers info [model]` (any model)
 
 ```
-◈ minimax-m3:cloud · ctx 524K · high · 21 ollama
+minimax-m3:cloud ☁ cloud
+
+minimax · 550B
+
+context     524K tokens
+size        384B (remote)
+digest      6d55374b63bb
+
+● vision   ● thinking   ● tools
 ```
 
-When no model is selected: `◈ no model · 21 ollama`.
-
-**Status badges** for special variants:
-
-| Badge | Meaning |
-|-------|---------|
-| `☁ cloud` | Ollama Cloud / remote model (no local disk) |
-| `⚡ QAT` | Quantization-Aware Training variant (Gemma 4) |
-| `◇ embed` | Embedding model (not a chat model) |
-
-**Capability dots:**
-
-- `●` green = supported
-- `○` dim = not supported
-
-Cycle modes with `/providers widget` (no args) or set explicitly:
-
+Press Escape to close.
 `/providers status` output looks like:
 
 ```
@@ -125,7 +128,7 @@ Config file: `~/.pi/agent/local-providers.json` (global) or `./.pi/local-provide
 | `debug` | boolean | `false` | Log extra info on session start |
 | `syncOnStartup` | boolean | `true` | Run discovery during the async factory (before `session_start`) |
 | `addToScope` | boolean | `true` | Push discovered models into `settings.json` `enabledModels` |
-| `showWidget` | boolean | `true` | Show the below-editor widget with current model info. Use `/providers widget off` to hide per-session. |
+| `showFooterStatus` | boolean | `true` | Show the footer status indicator with capabilities and context. Use `/providers footer off` to disable. |
 
 ## Capability detection
 

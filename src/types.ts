@@ -14,8 +14,8 @@ export interface ModelDiscoveryConfig {
   debug?: boolean;
   syncOnStartup?: boolean;
   addToScope?: boolean;
-  /** Widget display mode: 'rich' (default, two lines), 'minimal' (one line), or false (hidden). */
-  showWidget?: boolean | 'rich' | 'minimal';
+  /** Show the footer status indicator with capabilities + context. Default: true. */
+  showFooterStatus?: boolean;
   providers?: ProviderConfigs;
 }
 

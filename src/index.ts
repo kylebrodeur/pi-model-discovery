@@ -5,7 +5,7 @@ import { isModelDiscoveryState, buildPersistedState } from './state';
 import { updateStatus } from './ui';
 import { registerCommands } from './commands';
 import { performSync } from './sync';
-import { updateWidget, clearWidget, snapshotFromState, type WidgetData } from './widget';
+import { snapshotFromState, type ModelSnapshot } from './widget';
 
 const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let currentConfig: ModelDiscoveryConfig = FALLBACK_CONFIG;
@@ -27,17 +27,24 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     lastPersistedSnapshot = snapshot;
   };
 
-  const buildWidgetData = (): WidgetData => {
-    const total = lastSync?.ollama?.modelIds.length ?? 0;
-    const current = currentModelRef
-      ? snapshotFromState(currentModelRef, { enabled, debugEnabled, lastSync, timestamp: 0 }, syncedAt)
-      : null;
-    return { current, totalRegistered: total, thinkingLevel, showWidget: currentConfig.showWidget, syncedAt };
+  const getCurrentSnapshot = (): ModelSnapshot | null => {
+    if (!currentModelRef) return null;
+    return snapshotFromState(currentModelRef, {
+      enabled, debugEnabled, lastSync, timestamp: 0,
+    });
   };
 
-  const refreshWidget = () => {
+  const refreshStatus = () => {
     if (!activeCtx) return;
-    updateWidget(activeCtx, buildWidgetData());
+    updateStatus(
+      activeCtx,
+      {
+        current: getCurrentSnapshot(),
+        totalRegistered: lastSync?.ollama?.modelIds.length ?? 0,
+        thinkingLevel,
+      },
+      currentConfig.showFooterStatus !== false,
+    );
   };
 
   const actions = {
@@ -46,20 +53,19 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       lastSync = next;
       syncedAt = Date.now();
       persist(buildPersistedState(enabled, debugEnabled, lastSync));
-      refreshWidget();
+      refreshStatus();
     },
-    setShowWidget: (mode: boolean | 'rich' | 'minimal') => {
-      currentConfig = { ...currentConfig, showWidget: mode };
+    setShowFooterStatus: (on: boolean) => {
+      currentConfig = { ...currentConfig, showFooterStatus: on };
     },
-    updateStatus: (ctx: ExtensionContext) =>
-      updateStatus(ctx, lastSync?.ollama?.modelIds.length ?? 0, ollamaReachable),
+    updateStatus: (_ctx: ExtensionContext) => refreshStatus(),
+    refreshStatus,
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => {
       const loaded = loadModelDiscoveryConfig(currentCwd);
       currentConfig = loaded.config;
       if (!options?.preserveDebug) debugEnabled = currentConfig.debug ?? false;
-      if (ctx) actions.updateStatus(ctx);
+      if (ctx) refreshStatus();
     },
-    refreshWidget,
   };
 
   // ── Startup sync (async factory - runs before session_start) ─────
@@ -102,7 +108,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     }
 
     actions.persistState();
-    actions.updateStatus(ctx);
+    refreshStatus();
   };
 
   registerCommands(
@@ -114,6 +120,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       get debugEnabled() { return debugEnabled; },
       set debugEnabled(v) { debugEnabled = v; },
       get lastSync() { return lastSync; },
+      get currentModelRef() { return currentModelRef; },
     },
     actions,
   );
@@ -122,7 +129,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     activeCtx = ctx;
     await restoreStateFromSession(ctx);
 
-    // Detect already-selected ollama model on startup (so widget shows immediately)
+    // Detect already-selected ollama model on startup (so footer shows immediately)
     if (!currentModelRef && ctx.model && ctx.model.provider === 'ollama') {
       currentModelRef = `ollama/${ctx.model.id}`;
     }
@@ -145,26 +152,27 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       }
     }
 
-    actions.updateStatus(ctx);
-    refreshWidget();
+    refreshStatus();
     if (debugEnabled) ctx.ui.notify('Providers initialized.', 'info');
   });
 
   pi.on('session_shutdown', () => {
-    if (activeCtx) clearWidget(activeCtx);
+    if (activeCtx) {
+      try { updateStatus(activeCtx, { current: null, totalRegistered: 0, thinkingLevel: null }, false); } catch {}
+    }
     activeCtx = null;
   });
 
   pi.on('model_select', async (event, ctx) => {
     currentModelRef = `${event.model.provider}/${event.model.id}`;
     activeCtx = ctx;
-    refreshWidget();
+    refreshStatus();
   });
 
   pi.on('thinking_level_select', async (event, ctx) => {
     thinkingLevel = String(event.level);
     activeCtx = ctx;
-    refreshWidget();
+    refreshStatus();
   });
 };
 

@@ -1,5 +1,5 @@
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { truncateToWidth } from '@earendil-works/pi-tui';
 import type { ModelDiscoveryState } from './types';
 
 export interface ModelSnapshot {
@@ -20,17 +20,12 @@ export interface ModelSnapshot {
   size?: number;
   digest?: string;
   modifiedAt?: string;
-  syncedAt?: number;
 }
 
-export interface WidgetData {
+export interface StatusData {
   current: ModelSnapshot | null;
   totalRegistered: number;
   thinkingLevel: string | null;
-  /** 'rich' (default, two lines) or 'minimal' (one line) or false (hidden). */
-  showWidget?: boolean | 'rich' | 'minimal';
-  /** When the last sync ran, for freshness display. */
-  syncedAt?: number;
 }
 
 const formatContext = (n: number): string => {
@@ -47,9 +42,6 @@ const formatSize = (bytes: number): string => {
   return String(bytes);
 };
 
-const shortDigest = (digest: string): string =>
-  digest ? digest.slice(0, 7) : '';
-
 const relativeTime = (iso: string): string => {
   if (!iso) return '';
   const then = new Date(iso).getTime();
@@ -62,138 +54,98 @@ const relativeTime = (iso: string): string => {
   return `${Math.floor(seconds / 2592000)}mo`;
 };
 
-const relativeSince = (ts: number): string => {
-  if (!ts) return '';
-  const seconds = Math.floor((Date.now() - ts) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
+/** Single-line footer status. Only shows what pi doesn't already display. */
+export const buildStatus = (theme: any, data: StatusData): string => {
+  const { current } = data;
+  if (!current) return '';
+
+  const parts: string[] = [];
+
+  // Status icons (just the icon, no text)
+  if (current.remote) parts.push(theme.fg('accent', '☁'));
+  if (current.qat) parts.push(theme.fg('success', '⚡'));
+  if (current.embedding) parts.push(theme.fg('muted', '◇'));
+
+  // Capabilities (active only)
+  const caps: string[] = [];
+  if (current.vision) caps.push(theme.fg('success', 'vis'));
+  if (current.reasoning) caps.push(theme.fg('success', 'thi'));
+  if (current.tools) caps.push(theme.fg('success', 'tls'));
+  if (caps.length) parts.push(caps.join(' '));
+
+  // Context window (not usage % - that's already in pi's footer)
+  if (current.contextWindow > 0) {
+    parts.push(theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`));
+  }
+
+  // Disk size for local models
+  if (current.size && !current.remote) {
+    parts.push(theme.fg('dim', formatSize(current.size)));
+  }
+
+  return parts.join(' ');
 };
 
-/** Compact one-line for the "minimal" mode. */
-const buildMinimal = (theme: any, current: ModelSnapshot, ctx2: number, thinking: string | null, total: number): string => {
-  const bits: string[] = [
-    theme.fg('accent', '◈ '),
-    theme.fg('accent', current.name),
-  ];
-  if (ctx2 > 0) bits.push(theme.fg('muted', `· ctx ${formatContext(ctx2)}`));
-  if (thinking && current.reasoning) bits.push(theme.fg('warning', `· ${thinking}`));
-  bits.push(theme.fg('dim', `· ${total} ollama`));
-  return bits.join(' ');
-};
+/** Multi-line model card content for the popup. */
+export const buildModelCard = (theme: any, snapshot: ModelSnapshot, ollama: ModelDiscoveryState['lastSync'] extends infer T ? T extends { ollama?: infer O } ? O : never : never): string => {
+  if (!ollama) return '';
+  const lines: string[] = [];
+  const o = ollama as any;
 
-/** Rich two-line widget. */
-const buildRich = (
-  theme: any,
-  current: ModelSnapshot,
-  total: number,
-  thinking: string | null,
-  syncedAt: number | undefined,
-): string[] => {
-  // Line 1: provider · model · family · size · quant · status
+  const name = snapshot.name;
+  const tags: string[] = [];
+  if (snapshot.remote) tags.push('☁ cloud');
+  if (snapshot.qat) tags.push('⚡ QAT');
+  if (snapshot.embedding) tags.push('◇ embed');
+
+  lines.push(`${theme.fg('accent', name)}${tags.length ? ' ' + theme.fg('muted', tags.join(' ')) : ''}`);
+
   const meta: string[] = [];
-  if (current.family) meta.push(current.family);
-  if (current.parameterSize) meta.push(current.parameterSize);
-  if (current.quantization) meta.push(current.quantization);
-
-  const statusBadges: string[] = [];
-  if (current.remote) statusBadges.push(theme.fg('accent', '☁ cloud'));
-  if (current.qat) statusBadges.push(theme.fg('success', '⚡ QAT'));
-  if (current.embedding) statusBadges.push(theme.fg('muted', '◇ embed'));
-
-  const freshness = syncedAt
-    ? theme.fg('dim', `synced ${relativeSince(syncedAt)} ago`)
-    : '';
-  const totalLine = theme.fg('dim', `· ${total} ollama`);
-
-  const line1 = [
-    theme.fg('accent', '◈ '),
-    theme.fg('accent', current.name),
-    meta.length ? theme.fg('muted', `· ${meta.join(' · ')}`) : '',
-    statusBadges.length ? theme.fg('muted', `· ${statusBadges.join(' · ')}`) : '',
-    freshness,
-    totalLine,
-  ].filter(Boolean).join(' ');
-
-  // Line 2: capabilities + context + thinking
-  const cap = (label: string, on: boolean): string =>
-    on ? theme.fg('success', `● ${label}`) : theme.fg('dim', `○ ${label}`);
-
-  const caps = [
-    cap('vision', current.vision),
-    cap('thinking', current.reasoning),
-    cap('tools', current.tools),
-  ].join('   ');
-
-  const ctxStr = current.contextWindow > 0
-    ? theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`)
-    : '';
-  const sizeStr = current.size
-    ? theme.fg('muted', `${formatSize(current.size)} on disk`)
-    : '';
-  const thinkStr = thinking && current.reasoning
-    ? theme.fg('warning', `⚡ ${thinking}`)
-    : thinking
-      ? theme.fg('dim', `think ${thinking}`)
-      : '';
-  const digestStr = current.digest
-    ? theme.fg('dim', shortDigest(current.digest))
-    : '';
-  const ageStr = current.modifiedAt && !current.remote
-    ? theme.fg('dim', `${relativeTime(current.modifiedAt)} old`)
-    : '';
-
-  const line2 = [
-    caps,
-    [ctxStr, sizeStr].filter(Boolean).join(' · '),
-    thinkStr,
-    [digestStr, ageStr].filter(Boolean).join(' '),
-  ].filter(Boolean).join('   ');
-
-  return [line1, line2];
-};
-
-const buildWidgetLines = (ctx: ExtensionContext, data: WidgetData): string[] => {
-  const { current, totalRegistered, thinkingLevel, showWidget, syncedAt } = data;
-  const theme = ctx.ui.theme;
-  const mode = showWidget === false ? 'rich' : (showWidget || 'rich');
-
-  if (!current) {
-    return [theme.fg('muted', `◈ no model · ${totalRegistered} ollama`)];
+  if (snapshot.family) meta.push(snapshot.family);
+  if (snapshot.parameterSize) meta.push(snapshot.parameterSize);
+  if (snapshot.quantization) meta.push(snapshot.quantization);
+  if (snapshot.format && snapshot.format !== 'gguf') meta.push(snapshot.format);
+  if (meta.length) {
+    lines.push(theme.fg('muted', meta.join(' · ')));
   }
 
-  if (mode === 'minimal') {
-    return [buildMinimal(theme, current, current.contextWindow, thinkingLevel, totalRegistered)];
+  lines.push('');
+  lines.push(`${theme.fg('muted', 'context')}     ${snapshot.contextWindow > 0 ? formatContext(snapshot.contextWindow) : '?'}${snapshot.contextWindow ? ' tokens' : ''}`);
+  if (snapshot.size) {
+    lines.push(`${theme.fg('muted', 'size')}        ${formatSize(snapshot.size)}${snapshot.remote ? ' (remote)' : ' on disk'}`);
+  }
+  if (snapshot.digest) {
+    lines.push(`${theme.fg('muted', 'digest')}      ${snapshot.digest.slice(0, 12)}`);
+  }
+  if (snapshot.modifiedAt && !snapshot.remote) {
+    lines.push(`${theme.fg('muted', 'modified')}    ${relativeTime(snapshot.modifiedAt)} ago`);
   }
 
-  return buildRich(theme, current, totalRegistered, thinkingLevel, syncedAt);
+  lines.push('');
+  const cap = (label: string, on: boolean) => on
+    ? theme.fg('success', `● ${label}`)
+    : theme.fg('dim', `○ ${label}`);
+  lines.push(`${cap('vision', snapshot.vision)}   ${cap('thinking', snapshot.reasoning)}   ${cap('tools', snapshot.tools)}   ${snapshot.embedding ? theme.fg('success', '● embedding') : ''}`);
+
+  return lines.join('\n');
 };
 
-export const updateWidget = (ctx: ExtensionContext, data: WidgetData): void => {
-  if (data.showWidget === false) {
-    ctx.ui.setWidget('providers', undefined);
+export const updateStatus = (ctx: ExtensionContext, data: StatusData, enabled: boolean): void => {
+  if (!enabled) {
+    ctx.ui.setStatus('providers', undefined);
     return;
   }
-  const lines = buildWidgetLines(ctx, data);
-  ctx.ui.setWidget(
-    'providers',
-    (_tui, _theme) => ({
-      render: (width: number) => lines.map(line => truncateToWidth(line, width)),
-      invalidate: () => {},
-    }),
-    { placement: 'belowEditor' },
-  );
+  const text = buildStatus(ctx.ui.theme, data);
+  ctx.ui.setStatus('providers', text);
 };
 
-export const clearWidget = (ctx: ExtensionContext): void => {
-  ctx.ui.setWidget('providers', undefined);
+export const clearStatus = (ctx: ExtensionContext): void => {
+  ctx.ui.setStatus('providers', undefined);
 };
 
 export const snapshotFromState = (
   ref: string,
   state: ModelDiscoveryState,
-  syncedAt?: number,
 ): ModelSnapshot | null => {
   const slash = ref.indexOf('/');
   if (slash < 0) return null;
@@ -223,6 +175,11 @@ export const snapshotFromState = (
     size: ollama.sizes?.[id],
     digest: ollama.digests?.[id],
     modifiedAt: ollama.modifiedAt?.[id],
-    syncedAt,
   };
+};
+
+/** Build the full model card text (used by /providers card and shortcut). */
+export const buildCard = (theme: any, snapshot: ModelSnapshot | null, state: ModelDiscoveryState): string => {
+  if (!snapshot) return theme.fg('muted', 'No model selected.');
+  return buildModelCard(theme, snapshot, state.lastSync?.ollama as any);
 };
