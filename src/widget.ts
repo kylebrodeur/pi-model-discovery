@@ -68,13 +68,10 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
     locationParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
-  // Type: model variants like QAT or embedding, plus parameter size
+  // Type: model variants like QAT or embedding
   const typeParts: string[] = [];
   if (current.qat) typeParts.push(theme.fg('success', '✦'));
   if (current.embedding) typeParts.push(theme.fg('muted', '◇'));
-  if (current.parameterSize) {
-    typeParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
-  }
 
   // Capability icons (dim when off, success when on)
   // Optionally with text labels: "vision ◉" or just "◉"
@@ -90,21 +87,23 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
     capLabel('⏵', current.tools, 'tools'),
   ].join(' ');
 
-  // Stats: context window
+  // Stats: parameter size first, then context window
   const statParts: string[] = [];
+  if (current.parameterSize) {
+    statParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
+  }
   if (current.contextWindow > 0) {
     statParts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
   }
 
-  // Assemble: [location]  Caps: [caps]  [type]  [stats]  (double-space between sections)
+  // Assemble:
+  //   [location] [type]  Caps: [caps]  [stats]
+  // single-space between location and type (closely related model attributes)
+  // double-space between broader sections
   const capsSection = `${theme.fg('muted', 'Caps:')} ${capIcons}`;
-  const sections = [
-    ...locationParts,
-    capsSection,
-    ...typeParts,
-    ...statParts,
-  ].filter(s => s.length > 0);
-  return sections.join('  ');
+  const locationAndType = [...locationParts, ...typeParts].filter(s => s.length > 0).join(' ');
+  const otherSections = [capsSection, ...statParts].filter(s => s.length > 0);
+  return [locationAndType, ...otherSections].filter(s => s.length > 0).join('  ');
 };
 
 /** Multi-line model card content for the popup. */
