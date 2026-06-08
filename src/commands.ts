@@ -25,7 +25,6 @@ export const registerCommands = (
     setShowCapLabelText: (on: boolean) => void;
     setShowLocationLabels: (on: boolean) => void;
     refreshStatus: () => void;
-    getCurrentConfig: () => ModelDiscoveryConfig;
   },
 ) => {
   const SUBCOMMAND_DETAILS = [
@@ -246,19 +245,18 @@ export const registerCommands = (
     const hasExisting = Object.keys(existing).length > 0;
 
     if (hasExisting && !force) {
-      // Merge current in-memory config (with all current toggles/values) into existing file
-      // This saves the user's current effective settings AND adds any new fields
-      const current = actions.getCurrentConfig();
-      const merged = mergeConfig(FALLBACK_CONFIG, { ...existing, ...current });
+      // Add any new FALLBACK fields to the existing file
+      // (existing values take precedence)
+      const merged = mergeConfig(FALLBACK_CONFIG, existing);
       writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf-8');
-      ctx.ui.notify(`Saved current config. Run /providers reload to apply.`, 'info');
+      ctx.ui.notify(`Updated config with new defaults. Toggle settings to persist them.`, 'info');
       return;
     }
 
     writeFileSync(configPath, JSON.stringify(FALLBACK_CONFIG, null, 2), 'utf-8');
     ctx.ui.notify(hasExisting
-      ? `Reset config to defaults. Run /providers reload to apply.`
-      : `Created default config. Run /providers reload to apply.`, 'info');
+      ? `Reset config to defaults. Toggle settings to persist them.`
+      : `Created default config. Toggle settings to persist them.`, 'info');
   };
 
   pi.registerCommand('providers', {

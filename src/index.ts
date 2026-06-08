@@ -6,6 +6,9 @@ import { updateStatus } from './ui';
 import { registerCommands } from './commands';
 import { performSync } from './sync';
 import { snapshotFromState, type ModelSnapshot } from './widget';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
 
 const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let currentConfig: ModelDiscoveryConfig = FALLBACK_CONFIG;
@@ -25,6 +28,23 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     if (snapshot === lastPersistedSnapshot) return;
     pi.appendEntry('discovery-state', state);
     lastPersistedSnapshot = snapshot;
+  };
+
+  /**
+   * Write the current effective config to disk.
+   * Only writes if a config file already exists (created via /providers init).
+   * Otherwise toggles are kept in-memory only — the user explicitly opts in
+   * to disk persistence by running /providers init first.
+   */
+  const persistConfigToDisk = () => {
+    const configPath = join(getAgentDir(), 'local-providers.json');
+    if (!existsSync(configPath)) return; // No file yet — wait for /providers init
+    try {
+      // Merge with what's on disk so user-added fields aren't lost
+      const existing = JSON.parse(readFileSync(configPath, 'utf-8')) || {};
+      const merged = { ...existing, ...currentConfig };
+      writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf-8');
+    } catch { /* best-effort */ }
   };
 
   const getCurrentSnapshot = (): ModelSnapshot | null => {
@@ -59,12 +79,15 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     },
     setShowFooterStatus: (on: boolean) => {
       currentConfig = { ...currentConfig, showFooterStatus: on };
+      persistConfigToDisk();
     },
     setShowCapLabelText: (on: boolean) => {
       currentConfig = { ...currentConfig, showCapLabelText: on };
+      persistConfigToDisk();
     },
     setShowLocationLabels: (on: boolean) => {
       currentConfig = { ...currentConfig, showLocationLabels: on };
+      persistConfigToDisk();
     },
     updateStatus: (_ctx: ExtensionContext) => refreshStatus(),
     refreshStatus,
@@ -77,7 +100,6 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       if (!options?.preserveDebug) debugEnabled = currentConfig.debug ?? false;
       if (ctx) refreshStatus();
     },
-    getCurrentConfig: () => currentConfig,
   };
 
   // ── Startup sync (async factory - runs before session_start) ─────
