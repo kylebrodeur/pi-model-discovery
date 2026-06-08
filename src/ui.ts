@@ -5,13 +5,12 @@ export const updateStatus = (
   ctx: ExtensionContext,
   data: StatusData,
   enabled: boolean,
-  showCapLabels: boolean = true,
 ): void => {
   if (!enabled) {
     ctx.ui.setStatus('providers', undefined);
     return;
   }
-  ctx.ui.setStatus('providers', buildStatus(ctx.ui.theme, data, showCapLabels));
+  ctx.ui.setStatus('providers', buildStatus(ctx.ui.theme, data));
 };
 
 export const clearStatus = (ctx: ExtensionContext): void => {

@@ -55,14 +55,15 @@ const relativeTime = (iso: string): string => {
 };
 
 /** Single-line footer status. Only shows what pi doesn't already display. */
-export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean = true): string => {
+export const buildStatus = (theme: any, data: StatusData): string => {
   const { current } = data;
   if (!current) return '';
 
   // Variant icons first (cloud / qat / embedding) — these describe the model type
+  // All use single-width unicode glyphs so spacing stays consistent
   const variantIcons: string[] = [];
-  if (current.remote) variantIcons.push(theme.fg('accent', '☁'));
-  if (current.qat) variantIcons.push(theme.fg('success', '⚡'));
+  if (current.remote) variantIcons.push(theme.fg('accent', '◌'));
+  if (current.qat) variantIcons.push(theme.fg('success', '✦'));
   if (current.embedding) variantIcons.push(theme.fg('muted', '◇'));
 
   // Capability icons (dim when off, success when on)
@@ -86,8 +87,8 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean
     statParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
-  // Assemble: [variants]  [caps]  [stat1]  [stat2]  (double-space between sections)
-  const capsSection = showCapLabels ? `${theme.fg('muted', 'Caps:')} ${capIcons}` : capIcons;
+  // Assemble: [variants]  Caps: [caps]  [stat1]  [stat2]  (double-space between sections)
+  const capsSection = `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const sections = [
     variantIcons.join(' '),
     capsSection,
@@ -105,7 +106,7 @@ export const buildModelCard = (theme: any, snapshot: ModelSnapshot, ollama: Mode
   const name = snapshot.name;
   const tags: string[] = [];
   if (snapshot.remote) tags.push('☁ cloud');
-  if (snapshot.qat) tags.push('⚡ QAT');
+  if (snapshot.qat) tags.push('✦ QAT');
   if (snapshot.embedding) tags.push('◇ embed');
 
   lines.push(`${theme.fg('accent', name)}${tags.length ? ' ' + theme.fg('muted', tags.join(' ')) : ''}`);

@@ -22,7 +22,6 @@ export const registerCommands = (
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => void;
     persistLastSync: (lastSync: ModelDiscoveryState['lastSync']) => void;
     setShowFooterStatus: (on: boolean) => void;
-    setShowCapLabels: (on: boolean) => void;
     refreshStatus: () => void;
   },
 ) => {
@@ -32,7 +31,6 @@ export const registerCommands = (
     { name: 'info', desc: 'Show details for a specific model' },
     { name: 'card', desc: 'Open the model card popup for the current model' },
     { name: 'footer', desc: 'Toggle the footer status indicator' },
-    { name: 'caps', desc: 'Toggle the "Caps:" label in the footer' },
     { name: 'debug', desc: 'Toggle debug logging' },
     { name: 'reload', desc: 'Reload configuration' },
     { name: 'init', desc: 'Create default config file' },
@@ -81,7 +79,6 @@ export const registerCommands = (
       `Add to scope: ${state.currentConfig.addToScope ? 'yes' : 'no'}`,
       `Cleanup stale: ${ollamaCfg?.cleanupStale ? 'yes' : 'no'}`,
       `Footer status: ${state.currentConfig.showFooterStatus !== false ? 'on' : 'off'}`,
-      `Cap labels: ${state.currentConfig.showCapLabels !== false ? 'on' : 'off'}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
       ``,
       `Providers:`,
@@ -196,18 +193,6 @@ export const registerCommands = (
     ctx.ui.notify(`Footer status: ${next ? 'on' : 'off'}.`, 'info');
   };
 
-  const handleCaps = async (args: string[], ctx: ExtensionContext) => {
-    const cmd = args[0]?.toLowerCase();
-    const current = state.currentConfig.showCapLabels !== false;
-    let next: boolean;
-    if (cmd === 'on') next = true;
-    else if (cmd === 'off') next = false;
-    else next = !current;
-    actions.setShowCapLabels(next);
-    actions.refreshStatus();
-    ctx.ui.notify(`Cap labels: ${next ? 'on' : 'off'}.`, 'info');
-  };
-
   const handleInit = async (args: string[], ctx: ExtensionContext) => {
     const configPath = join(getAgentDir(), 'local-providers.json');
     const force = args.includes('--force') || args.includes('-f');
@@ -246,9 +231,9 @@ export const registerCommands = (
         }));
         return items.length > 0 ? items : null;
       }
-      if (subcommand === 'footer' || subcommand === 'caps') {
+      if (subcommand === 'footer') {
         const items = ['on', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
-          value: `${subcommand} ${v}`, label: v,
+          value: `footer ${v}`, label: v,
         }));
         return items.length > 0 ? items : null;
       }
@@ -269,7 +254,6 @@ export const registerCommands = (
         case 'info': await handleInfo(subArgs, ctx); break;
         case 'card': await handleCard(subArgs, ctx); break;
         case 'footer': await handleFooter(subArgs, ctx); break;
-        case 'caps': await handleCaps(subArgs, ctx); break;
         case 'debug': await handleDebug(subArgs, ctx); break;
         case 'reload': await handleReload(subArgs, ctx); break;
         case 'init': await handleInit(subArgs, ctx); break;
@@ -282,7 +266,6 @@ export const registerCommands = (
              '  info [model]       Show details for a model (defaults to current).',
              '  card               Open the model card popup for the current model.',
              '  footer on/off      Toggle the footer status indicator.',
-             '  caps on/off        Toggle the "Caps:" label in the footer.',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
              '  init [--force]     Create or update config with current defaults. Use --force to reset.',
