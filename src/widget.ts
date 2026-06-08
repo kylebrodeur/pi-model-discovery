@@ -59,12 +59,16 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   const { current } = data;
   if (!current) return '';
 
-  // Location: cloud icon for remote (local has no icon, disk size serves as the marker)
+  // Location: cloud OR local disk size (mutually exclusive markers)
   // All use single-width unicode glyphs so spacing stays consistent
   const locationParts: string[] = [];
-  if (current.remote) locationParts.push(theme.fg('accent', '☁'));
+  if (current.remote) {
+    locationParts.push(theme.fg('accent', '☁'));
+  } else if (current.size) {
+    locationParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
+  }
 
-  // Type: model variants like QAT or embedding
+  // Type: model variants like QAT or embedding, plus parameter size
   const typeParts: string[] = [];
   if (current.qat) typeParts.push(theme.fg('success', '✦'));
   if (current.embedding) typeParts.push(theme.fg('muted', '◇'));
@@ -86,13 +90,10 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
     capLabel('⏵', current.tools, 'tools'),
   ].join(' ');
 
-  // Stats: context window, disk size (local only)
+  // Stats: context window
   const statParts: string[] = [];
   if (current.contextWindow > 0) {
     statParts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
-  }
-  if (current.size && !current.remote) {
-    statParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
   // Assemble: [location]  Caps: [caps]  [type]  [stats]  (double-space between sections)
