@@ -97,17 +97,18 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   }
 
   // Assemble:
-  //   [location]   [type]  [caps]  [stats]
-  // single-space between location and type (closely related model attributes)
-  // triple-space AFTER location (location is the most important section, give it room)
-  // double-space between broader sections
+  //   ◈  [location]   [type]  [caps]  [stats]
+  // - ◈ prefix marks this row as a model card (visual association)
+  // - double-space after prefix
+  // - triple-space after location (clear visual separation)
+  // - double-space between caps and stats
   // "Caps:" label is only shown when cap labels are hidden (icons alone are ambiguous)
   const capSection = showCapLabelText ? capIcons : `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const locationSection = locationParts.join(' ');
   const typeSection = typeParts.join(' ');
-  const sections: string[] = [];
+  const prefix = theme.fg('dim', '◈');
+  const sections: string[] = [prefix];
   if (locationSection) {
-    // location gets a trailing triple-space (or more) for visual prominence
     sections.push(locationSection + (typeSection || capSection || statParts.length ? '   ' : ''));
   }
   if (typeSection) {
@@ -162,17 +163,25 @@ export const buildModelCard = (theme: any, snapshot: ModelSnapshot, ollama: Mode
   return lines.join('\n');
 };
 
-export const updateStatus = (ctx: ExtensionContext, data: StatusData, enabled: boolean): void => {
+export const updateStatus = (ctx: ExtensionContext, data: StatusData, enabled: boolean, showCapLabelText: boolean = false): void => {
   if (!enabled) {
-    ctx.ui.setStatus('providers', undefined);
+    ctx.ui.setWidget('providers', undefined);
     return;
   }
-  const text = buildStatus(ctx.ui.theme, data);
-  ctx.ui.setStatus('providers', text);
+  // Build the status line once, but truncate on render to avoid crashing on narrow terminals
+  const text = buildStatus(ctx.ui.theme, data, showCapLabelText);
+  ctx.ui.setWidget(
+    'providers',
+    (_tui, _theme) => ({
+      render: (width: number) => text ? [truncateToWidth(text, width)] : [],
+      invalidate: () => {},
+    }),
+    { placement: 'belowEditor' },
+  );
 };
 
 export const clearStatus = (ctx: ExtensionContext): void => {
-  ctx.ui.setStatus('providers', undefined);
+  ctx.ui.setWidget('providers', undefined);
 };
 
 export const snapshotFromState = (

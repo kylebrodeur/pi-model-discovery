@@ -67,7 +67,8 @@ export const registerCommands = (
       lastSync: state.lastSync,
       timestamp: 0,
     });
-    await ctx.ui.editor(`${snapshot.name} (Esc to close)`, text);
+    // Use notify (non-blocking, no cursor) instead of editor (which puts a cursor)
+    ctx.ui.notify(text, 'info');
   };
 
   const handleStatus = async (_args: string[], ctx: ExtensionContext) => {
