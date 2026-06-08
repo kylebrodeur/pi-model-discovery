@@ -66,12 +66,14 @@ export const buildStatus = (theme: any, data: StatusData): string => {
   if (current.qat) parts.push(theme.fg('success', '⚡'));
   if (current.embedding) parts.push(theme.fg('muted', '◇'));
 
-  // Capabilities (active only)
-  const caps: string[] = [];
-  if (current.vision) caps.push(theme.fg('success', 'vision'));
-  if (current.reasoning) caps.push(theme.fg('success', 'thinking'));
-  if (current.tools) caps.push(theme.fg('success', 'tools'));
-  if (caps.length) parts.push(caps.join(' '));
+  // Capabilities: icons only, dim when off, accent when on
+  const cap = (icon: string, on: boolean): string =>
+    on ? theme.fg('success', icon) : theme.fg('dim', icon);
+  const caps = [
+    cap('◉', current.vision),      // eye / vision
+    cap('◆', current.reasoning),   // diamond / thinking
+    cap('⏵', current.tools),       // play / tools
+  ].join('');
 
   // Context window (not usage % - that's already in pi's footer)
   if (current.contextWindow > 0) {

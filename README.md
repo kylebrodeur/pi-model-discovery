@@ -44,14 +44,18 @@ pi update npm:@kylebrodeur/pi-model-discovery
 A compact indicator in pi's footer that complements (not duplicates) the built-in model display. It shows only what pi doesn't already show — capabilities and special variant badges, plus context window size:
 
 ```
-☁ vision thinking tools  ctx 524K
+☁ ◉◆⏵  ctx 524K
 ```
 
 - `☁` cloud/remote model
 - `⚡` QAT (Quantization-Aware Training, e.g. Gemma 4)
 - `◇` embedding model
-- `vis thi tls` — vision / thinking / tools (green = supported)
+- `◉` vision (dim when off)
+- `◆` thinking (dim when off)
+- `⏵` tools (dim when off)
 - `ctx 524K` — context window size (not usage; pi's bar shows usage)
+
+Icons are dim when the capability is absent, green when present. Full capability words appear only in the model card.
 
 Toggle with `/providers footer on/off` or set in config.
 
