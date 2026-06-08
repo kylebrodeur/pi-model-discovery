@@ -17,6 +17,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   let currentModelRef: string | null = null;
   let thinkingLevel: string | null = null;
   let ollamaReachable = false;
+  let syncedAt: number | undefined = undefined;
   let activeCtx: ExtensionContext | null = null;
 
   const persist = (state: ModelDiscoveryState) => {
@@ -29,9 +30,9 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
   const buildWidgetData = (): WidgetData => {
     const total = lastSync?.ollama?.modelIds.length ?? 0;
     const current = currentModelRef
-      ? snapshotFromState(currentModelRef, { enabled, debugEnabled, lastSync, timestamp: 0 })
+      ? snapshotFromState(currentModelRef, { enabled, debugEnabled, lastSync, timestamp: 0 }, syncedAt)
       : null;
-    return { current, totalRegistered: total, thinkingLevel, showWidget: currentConfig.showWidget };
+    return { current, totalRegistered: total, thinkingLevel, showWidget: currentConfig.showWidget, syncedAt };
   };
 
   const refreshWidget = () => {
@@ -43,11 +44,12 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     persistState: () => persist(buildPersistedState(enabled, debugEnabled, lastSync)),
     persistLastSync: (next: ModelDiscoveryState['lastSync']) => {
       lastSync = next;
+      syncedAt = Date.now();
       persist(buildPersistedState(enabled, debugEnabled, lastSync));
       refreshWidget();
     },
-    setShowWidget: (on: boolean) => {
-      currentConfig = { ...currentConfig, showWidget: on };
+    setShowWidget: (mode: boolean | 'rich' | 'minimal') => {
+      currentConfig = { ...currentConfig, showWidget: mode };
     },
     updateStatus: (ctx: ExtensionContext) =>
       updateStatus(ctx, lastSync?.ollama?.modelIds.length ?? 0, ollamaReachable),
@@ -71,6 +73,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     });
     if (result.capabilities) {
       lastSync = result.capabilities;
+      syncedAt = Date.now();
     }
     ollamaReachable = result.success;
     if (result.added.length > 0) {
@@ -133,6 +136,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       });
       if (result.capabilities) {
         lastSync = result.capabilities;
+        syncedAt = Date.now();
         actions.persistState();
       }
       ollamaReachable = result.success || ollamaReachable;

@@ -68,7 +68,9 @@ export const normalizeConfig = (raw: ModelDiscoveryConfig): ConfigLoadResult => 
     debug: typeof raw.debug === 'boolean' ? raw.debug : FALLBACK_CONFIG.debug,
     syncOnStartup: typeof raw.syncOnStartup === 'boolean' ? raw.syncOnStartup : FALLBACK_CONFIG.syncOnStartup,
     addToScope: typeof raw.addToScope === 'boolean' ? raw.addToScope : FALLBACK_CONFIG.addToScope,
-    showWidget: typeof raw.showWidget === 'boolean' ? raw.showWidget : FALLBACK_CONFIG.showWidget,
+    showWidget: (typeof raw.showWidget === 'boolean' || raw.showWidget === 'rich' || raw.showWidget === 'minimal')
+      ? raw.showWidget
+      : FALLBACK_CONFIG.showWidget,
     providers: {
       ollama: { ...FALLBACK_OLLAMA, ...raw.providers?.ollama },
     },

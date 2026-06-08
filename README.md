@@ -32,7 +32,7 @@ pi update npm:@kylebrodeur/pi-model-discovery
 | `/providers sync` | Re-run the discovery sync (uses cache) |
 | `/providers sync --force` | Bypass the capability cache and refetch from Ollama |
 | `/providers info <model>` | Show context window, family, parameters, capabilities for a model (partial match) |
-| `/providers widget on/off` | Show or hide the below-editor widget |
+| `/providers widget [mode]` | Cycle or set widget: `rich` (default), `minimal`, `off` |
 | `/providers init` | Create a default `local-providers.json` config file |
 | `/providers reload` | Reload config without restarting Pi |
 | `/providers debug on/off` | Toggle debug logging |
@@ -40,13 +40,37 @@ pi update npm:@kylebrodeur/pi-model-discovery
 
 ## Widget
 
-A persistent indicator below the editor shows the current model's metadata and updates live as you switch models or change thinking level:
+A persistent indicator below the editor shows the current model's metadata and updates live as you switch models or change thinking level.
+
+**Rich mode (default)** — two lines with everything:
 
 ```
-gemma4:12b · gemma4 · 12B · Q4_K_M   ctx 262K   vision thinking tools   4eb23ef 2d ago
+◈ minimax-m3:cloud · minimax-m3 · 550B · ☁ cloud   synced 2m ago · 21 ollama
+● vision   ● thinking   ● tools   ctx 524K · 384B on disk   ⚡ high   d03a959 1d
 ```
 
-Cloud models show a `cloud` tag, QAT variants show `qat`, embedding models show `embed`. Local models also show disk size and relative modified time. When no model is selected, shows: `no model · 21 ollama`.
+**Minimal mode** — one line, matches pi's built-in footer style:
+
+```
+◈ minimax-m3:cloud · ctx 524K · high · 21 ollama
+```
+
+When no model is selected: `◈ no model · 21 ollama`.
+
+**Status badges** for special variants:
+
+| Badge | Meaning |
+|-------|---------|
+| `☁ cloud` | Ollama Cloud / remote model (no local disk) |
+| `⚡ QAT` | Quantization-Aware Training variant (Gemma 4) |
+| `◇ embed` | Embedding model (not a chat model) |
+
+**Capability dots:**
+
+- `●` green = supported
+- `○` dim = not supported
+
+Cycle modes with `/providers widget` (no args) or set explicitly:
 
 `/providers status` output looks like:
 

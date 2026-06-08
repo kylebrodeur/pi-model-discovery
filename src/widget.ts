@@ -20,13 +20,17 @@ export interface ModelSnapshot {
   size?: number;
   digest?: string;
   modifiedAt?: string;
+  syncedAt?: number;
 }
 
 export interface WidgetData {
   current: ModelSnapshot | null;
   totalRegistered: number;
   thinkingLevel: string | null;
-  showWidget?: boolean;
+  /** 'rich' (default, two lines) or 'minimal' (one line) or false (hidden). */
+  showWidget?: boolean | 'rich' | 'minimal';
+  /** When the last sync ran, for freshness display. */
+  syncedAt?: number;
 }
 
 const formatContext = (n: number): string => {
@@ -51,69 +55,119 @@ const relativeTime = (iso: string): string => {
   const then = new Date(iso).getTime();
   if (isNaN(then)) return '';
   const seconds = Math.floor((Date.now() - then) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d ago`;
-  if (seconds < 31536000) return `${Math.floor(seconds / 2592000)}mo ago`;
-  return `${Math.floor(seconds / 31536000)}y ago`;
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d`;
+  return `${Math.floor(seconds / 2592000)}mo`;
 };
 
-/** Build a single pre-colored line for the below-editor widget. */
-const buildWidgetLines = (ctx: ExtensionContext, data: WidgetData): string[] => {
-  const { current, totalRegistered, thinkingLevel } = data;
-  const theme = ctx.ui.theme;
+const relativeSince = (ts: number): string => {
+  if (!ts) return '';
+  const seconds = Math.floor((Date.now() - ts) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+};
 
-  if (!current) {
-    return [theme.fg('muted', `no model · ${totalRegistered} ollama`)];
-  }
+/** Compact one-line for the "minimal" mode. */
+const buildMinimal = (theme: any, current: ModelSnapshot, ctx2: number, thinking: string | null, total: number): string => {
+  const bits: string[] = [
+    theme.fg('accent', '◈ '),
+    theme.fg('accent', current.name),
+  ];
+  if (ctx2 > 0) bits.push(theme.fg('muted', `· ctx ${formatContext(ctx2)}`));
+  if (thinking && current.reasoning) bits.push(theme.fg('warning', `· ${thinking}`));
+  bits.push(theme.fg('dim', `· ${total} ollama`));
+  return bits.join(' ');
+};
 
+/** Rich two-line widget. */
+const buildRich = (
+  theme: any,
+  current: ModelSnapshot,
+  total: number,
+  thinking: string | null,
+  syncedAt: number | undefined,
+): string[] => {
+  // Line 1: provider · model · family · size · quant · status
   const meta: string[] = [];
   if (current.family) meta.push(current.family);
   if (current.parameterSize) meta.push(current.parameterSize);
   if (current.quantization) meta.push(current.quantization);
-  if (current.format && current.format !== 'gguf') meta.push(current.format);
 
-  const tags: string[] = [];
-  if (current.remote) tags.push(theme.fg('accent', 'cloud'));
-  if (current.qat) tags.push(theme.fg('accent', 'qat'));
-  if (current.embedding) tags.push(theme.fg('accent', 'embed'));
+  const statusBadges: string[] = [];
+  if (current.remote) statusBadges.push(theme.fg('accent', '☁ cloud'));
+  if (current.qat) statusBadges.push(theme.fg('success', '⚡ QAT'));
+  if (current.embedding) statusBadges.push(theme.fg('muted', '◇ embed'));
 
-  const left = [
+  const freshness = syncedAt
+    ? theme.fg('dim', `synced ${relativeSince(syncedAt)} ago`)
+    : '';
+  const totalLine = theme.fg('dim', `· ${total} ollama`);
+
+  const line1 = [
+    theme.fg('accent', '◈ '),
     theme.fg('accent', current.name),
     meta.length ? theme.fg('muted', `· ${meta.join(' · ')}`) : '',
-    tags.length ? theme.fg('muted', `· ${tags.join(' · ')}`) : '',
+    statusBadges.length ? theme.fg('muted', `· ${statusBadges.join(' · ')}`) : '',
+    freshness,
+    totalLine,
   ].filter(Boolean).join(' ');
 
-  const middle: string[] = [
-    theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`),
-  ];
-  if (thinkingLevel && current.reasoning) {
-    middle.push(theme.fg('accent', `think ${thinkingLevel}`));
-  } else if (thinkingLevel) {
-    middle.push(theme.fg('muted', `think ${thinkingLevel}`));
+  // Line 2: capabilities + context + thinking
+  const cap = (label: string, on: boolean): string =>
+    on ? theme.fg('success', `● ${label}`) : theme.fg('dim', `○ ${label}`);
+
+  const caps = [
+    cap('vision', current.vision),
+    cap('thinking', current.reasoning),
+    cap('tools', current.tools),
+  ].join('   ');
+
+  const ctxStr = current.contextWindow > 0
+    ? theme.fg('muted', `ctx ${formatContext(current.contextWindow)}`)
+    : '';
+  const sizeStr = current.size
+    ? theme.fg('muted', `${formatSize(current.size)} on disk`)
+    : '';
+  const thinkStr = thinking && current.reasoning
+    ? theme.fg('warning', `⚡ ${thinking}`)
+    : thinking
+      ? theme.fg('dim', `think ${thinking}`)
+      : '';
+  const digestStr = current.digest
+    ? theme.fg('dim', shortDigest(current.digest))
+    : '';
+  const ageStr = current.modifiedAt && !current.remote
+    ? theme.fg('dim', `${relativeTime(current.modifiedAt)} old`)
+    : '';
+
+  const line2 = [
+    caps,
+    [ctxStr, sizeStr].filter(Boolean).join(' · '),
+    thinkStr,
+    [digestStr, ageStr].filter(Boolean).join(' '),
+  ].filter(Boolean).join('   ');
+
+  return [line1, line2];
+};
+
+const buildWidgetLines = (ctx: ExtensionContext, data: WidgetData): string[] => {
+  const { current, totalRegistered, thinkingLevel, showWidget, syncedAt } = data;
+  const theme = ctx.ui.theme;
+  const mode = showWidget === false ? 'rich' : (showWidget || 'rich');
+
+  if (!current) {
+    return [theme.fg('muted', `◈ no model · ${totalRegistered} ollama`)];
   }
-  if (current.size) {
-    middle.push(theme.fg('muted', formatSize(current.size)));
+
+  if (mode === 'minimal') {
+    return [buildMinimal(theme, current, current.contextWindow, thinkingLevel, totalRegistered)];
   }
 
-  const caps: string[] = [];
-  if (current.vision) caps.push(theme.fg('muted', 'vision'));
-  if (current.reasoning) caps.push(theme.fg('muted', 'thinking'));
-  if (current.tools) caps.push(theme.fg('muted', 'tools'));
-
-  const trail: string[] = [];
-  if (current.digest) trail.push(shortDigest(current.digest));
-  if (current.modifiedAt && !current.remote) trail.push(relativeTime(current.modifiedAt));
-
-  const parts = [
-    left,
-    middle.join(theme.fg('muted', ' · ')),
-    caps.length ? caps.join(' ') : '',
-    trail.length ? theme.fg('dim', trail.join(' ')) : '',
-  ];
-
-  return [parts.filter(Boolean).join('   ')];
+  return buildRich(theme, current, totalRegistered, thinkingLevel, syncedAt);
 };
 
 export const updateWidget = (ctx: ExtensionContext, data: WidgetData): void => {
@@ -121,13 +175,11 @@ export const updateWidget = (ctx: ExtensionContext, data: WidgetData): void => {
     ctx.ui.setWidget('providers', undefined);
     return;
   }
-  // Use the render function form so we can truncate lines to the terminal width.
   const lines = buildWidgetLines(ctx, data);
   ctx.ui.setWidget(
     'providers',
     (_tui, _theme) => ({
-      render: (width: number) =>
-        lines.map(line => truncateToWidth(line, width)),
+      render: (width: number) => lines.map(line => truncateToWidth(line, width)),
       invalidate: () => {},
     }),
     { placement: 'belowEditor' },
@@ -141,6 +193,7 @@ export const clearWidget = (ctx: ExtensionContext): void => {
 export const snapshotFromState = (
   ref: string,
   state: ModelDiscoveryState,
+  syncedAt?: number,
 ): ModelSnapshot | null => {
   const slash = ref.indexOf('/');
   if (slash < 0) return null;
@@ -170,5 +223,6 @@ export const snapshotFromState = (
     size: ollama.sizes?.[id],
     digest: ollama.digests?.[id],
     modifiedAt: ollama.modifiedAt?.[id],
+    syncedAt,
   };
 };

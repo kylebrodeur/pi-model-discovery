@@ -19,7 +19,7 @@ export const registerCommands = (
     updateStatus: (ctx: ExtensionContext) => void;
     reloadConfig: (ctx?: ExtensionContext, options?: { preserveDebug?: boolean }) => void;
     persistLastSync: (lastSync: ModelDiscoveryState['lastSync']) => void;
-    setShowWidget: (on: boolean) => void;
+    setShowWidget: (mode: boolean | 'rich' | 'minimal') => void;
     refreshWidget: () => void;
   },
 ) => {
@@ -51,7 +51,7 @@ export const registerCommands = (
       `Sync on startup: ${state.currentConfig.syncOnStartup ? 'yes' : 'no'}`,
       `Add to scope: ${state.currentConfig.addToScope ? 'yes' : 'no'}`,
       `Cleanup stale: ${ollamaCfg?.cleanupStale ? 'yes' : 'no'}`,
-      `Widget: ${state.currentConfig.showWidget !== false ? 'shown' : 'hidden'}`,
+      `Widget: ${state.currentConfig.showWidget === false ? 'hidden' : state.currentConfig.showWidget === 'minimal' ? 'minimal' : 'rich'}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
       ``,
       `Providers:`,
@@ -158,15 +158,21 @@ export const registerCommands = (
   };
 
   const handleWidget = async (args: string[], ctx: ExtensionContext) => {
-    const current = state.currentConfig.showWidget !== false;
     const cmd = args[0]?.toLowerCase();
-    let next: boolean;
-    if (cmd === 'on') next = true;
+    const current = state.currentConfig.showWidget;
+    let next: boolean | 'rich' | 'minimal';
+    if (cmd === 'on' || cmd === 'rich') next = 'rich';
     else if (cmd === 'off') next = false;
-    else next = !current;
+    else if (cmd === 'minimal' || cmd === 'min') next = 'minimal';
+    else if (cmd === 'toggle') next = current === false ? 'rich' : false;
+    else {
+      // No arg: cycle rich -> minimal -> off -> rich
+      next = current === 'rich' ? 'minimal' : current === 'minimal' ? false : 'rich';
+    }
     actions.setShowWidget(next);
     actions.refreshWidget();
-    ctx.ui.notify(`Widget ${next ? 'shown' : 'hidden'}.`, 'info');
+    const label = next === false ? 'hidden' : next === 'minimal' ? 'minimal' : 'rich';
+    ctx.ui.notify(`Widget: ${label}.`, 'info');
   };
 
   const handleInit = async (args: string[], ctx: ExtensionContext) => {
@@ -208,7 +214,7 @@ export const registerCommands = (
         return items.length > 0 ? items : null;
       }
       if (subcommand === 'widget') {
-        const items = ['on', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
+        const items = ['rich', 'minimal', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
           value: `widget ${v}`, label: v,
         }));
         return items.length > 0 ? items : null;
@@ -239,7 +245,7 @@ export const registerCommands = (
              '  status             Show sync status and registered models with capabilities.',
              '  sync [--force]     Sync local providers. --force bypasses capability cache.',
              '  info <model>       Show details (context, capabilities) for a specific model.',
-             '  widget on/off      Show or hide the below-editor widget.',
+             '  widget [mode]       Cycle or set widget mode: rich (default), minimal, off.',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
              '  init [--force]     Create or update config with current defaults. Use --force to reset.',
