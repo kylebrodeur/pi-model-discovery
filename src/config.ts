@@ -15,6 +15,7 @@ export const FALLBACK_CONFIG: ModelDiscoveryConfig = {
   syncOnStartup: true,
   addToScope: true,
   showFooterStatus: true,
+  showCapLabelText: false,
   providers: { ollama: FALLBACK_OLLAMA },
 };
 
@@ -47,6 +48,7 @@ export const mergeConfig = (
   syncOnStartup: override.syncOnStartup ?? base.syncOnStartup,
   addToScope: override.addToScope ?? base.addToScope,
   showFooterStatus: override.showFooterStatus ?? base.showFooterStatus,
+  showCapLabelText: override.showCapLabelText ?? base.showCapLabelText,
   providers: mergeProviders(base.providers, override.providers),
 });
 
@@ -69,6 +71,7 @@ export const normalizeConfig = (raw: ModelDiscoveryConfig): ConfigLoadResult => 
     syncOnStartup: typeof raw.syncOnStartup === 'boolean' ? raw.syncOnStartup : FALLBACK_CONFIG.syncOnStartup,
     addToScope: typeof raw.addToScope === 'boolean' ? raw.addToScope : FALLBACK_CONFIG.addToScope,
     showFooterStatus: typeof raw.showFooterStatus === 'boolean' ? raw.showFooterStatus : FALLBACK_CONFIG.showFooterStatus,
+    showCapLabelText: typeof raw.showCapLabelText === 'boolean' ? raw.showCapLabelText : FALLBACK_CONFIG.showCapLabelText,
     providers: {
       ollama: { ...FALLBACK_OLLAMA, ...raw.providers?.ollama },
     },

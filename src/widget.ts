@@ -55,31 +55,39 @@ const relativeTime = (iso: string): string => {
 };
 
 /** Single-line footer status. Only shows what pi doesn't already display. */
-export const buildStatus = (theme: any, data: StatusData): string => {
+export const buildStatus = (theme: any, data: StatusData, showCapLabelText: boolean = false): string => {
   const { current } = data;
   if (!current) return '';
 
-  // Variant icons first (cloud / qat / embedding) — these describe the model type
+  // Location icons (cloud / qat / embedding) — describe where the model lives
   // All use single-width unicode glyphs so spacing stays consistent
-  const variantIcons: string[] = [];
-  if (current.remote) variantIcons.push(theme.fg('accent', '◌'));
-  if (current.qat) variantIcons.push(theme.fg('success', '✦'));
-  if (current.embedding) variantIcons.push(theme.fg('muted', '◇'));
+  const locationIcons: string[] = [];
+  if (current.remote) locationIcons.push(theme.fg('accent', '☁'));
+  if (current.qat) locationIcons.push(theme.fg('success', '✦'));
+  if (current.embedding) locationIcons.push(theme.fg('muted', '◇'));
 
   // Capability icons (dim when off, success when on)
-  const cap = (icon: string, on: boolean): string =>
-    on ? theme.fg('success', icon) : theme.fg('dim', icon);
+  // Optionally with text labels: "vision ◉" or just "◉"
+  const capLabel = (icon: string, on: boolean, label: string): string => {
+    const styledIcon = on ? theme.fg('success', icon) : theme.fg('dim', icon);
+    if (!showCapLabelText) return styledIcon;
+    const styledLabel = on ? theme.fg('success', label) : theme.fg('dim', label);
+    return `${styledLabel} ${styledIcon}`;
+  };
   const capIcons = [
-    cap('◉', current.vision),      // eye / vision
-    cap('◆', current.reasoning),   // diamond / thinking
-    cap('⏵', current.tools),       // play / tools
+    capLabel('◉', current.vision, 'vision'),
+    capLabel('◆', current.reasoning, 'thinking'),
+    capLabel('⏵', current.tools, 'tools'),
   ].join(' ');
 
-  // Stats: parameter size, context window, disk size (local only)
-  const statParts: string[] = [];
+  // Type info: parameter size
+  const typeParts: string[] = [];
   if (current.parameterSize) {
-    statParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
+    typeParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
   }
+
+  // Stats: context window, disk size (local only)
+  const statParts: string[] = [];
   if (current.contextWindow > 0) {
     statParts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
   }
@@ -87,11 +95,12 @@ export const buildStatus = (theme: any, data: StatusData): string => {
     statParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
-  // Assemble: [variants]  Caps: [caps]  [stat1]  [stat2]  (double-space between sections)
+  // Assemble: [location]  Caps: [caps]  [type]  [stats]  (double-space between sections)
   const capsSection = `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const sections = [
-    variantIcons.join(' '),
+    locationIcons.join(' '),
     capsSection,
+    ...typeParts,
     ...statParts,
   ].filter(s => s.length > 0);
   return sections.join('  ');
