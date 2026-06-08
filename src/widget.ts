@@ -59,12 +59,6 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean
   const { current } = data;
   if (!current) return '';
 
-  // Variant icons (cloud / qat / embedding)
-  const variantIcons: string[] = [];
-  if (current.remote) variantIcons.push(theme.fg('accent', '☁'));
-  if (current.qat) variantIcons.push(theme.fg('success', '⚡'));
-  if (current.embedding) variantIcons.push(theme.fg('muted', '◇'));
-
   // Capability icons (dim when off, success when on)
   const cap = (icon: string, on: boolean): string =>
     on ? theme.fg('success', icon) : theme.fg('dim', icon);
@@ -74,26 +68,27 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabels: boolean
     cap('⏵', current.tools),       // play / tools
   ].join(' ');
 
-  // Stats: context window (and disk size for local models)
+  // Stats: parameter size, context window, disk size, then variant
   const statParts: string[] = [];
+  if (current.parameterSize) {
+    statParts.push(theme.fg('muted', `◫:${current.parameterSize}`));
+  }
   if (current.contextWindow > 0) {
     statParts.push(theme.fg('muted', `▣:${formatContext(current.contextWindow)}`));
   }
+  // For local models, disk size; for cloud models, cloud icon
   if (current.size && !current.remote) {
     statParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
+  } else if (current.remote) {
+    statParts.push(theme.fg('accent', '☁'));
   }
+  if (current.qat) statParts.push(theme.fg('success', '⚡'));
+  if (current.embedding) statParts.push(theme.fg('muted', '◇'));
 
-  // Assemble: variantIcons • Caps: capIcons • statParts (uniform single-space + middot)
-  const middot = theme.fg('dim', '•');
-  const pieces: string[] = [];
-  if (variantIcons.length) pieces.push(variantIcons.join(' '));
-  if (variantIcons.length) pieces.push(middot);
-  pieces.push(showCapLabels ? `${theme.fg('muted', 'Caps:')} ${capIcons}` : capIcons);
-  if (statParts.length) {
-    pieces.push(middot);
-    pieces.push(statParts.join(' '));
-  }
-  return pieces.join(' ');
+  // Assemble: caps section then stats, with pipe separators and consistent spacing
+  const sep = theme.fg('dim', '|');
+  const capsSection = showCapLabels ? `${theme.fg('muted', 'Caps:')} ${capIcons}` : capIcons;
+  return [capsSection, ...statParts].join(` ${sep} `);
 };
 
 /** Multi-line model card content for the popup. */
