@@ -73,18 +73,18 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   if (current.qat) typeParts.push(theme.fg('success', '✦'));
   if (current.embedding) typeParts.push(theme.fg('muted', '◇'));
 
-  // Capability icons (dim when off, success when on)
-  // Optionally with text labels: "vision ◉" or just "◉"
-  const capLabel = (icon: string, on: boolean, label: string): string => {
+  // Capability icons: "Caps:" then icon-then-label for each
+  // (label AFTER the icon, not before)
+  const cap = (icon: string, on: boolean, label: string): string => {
     const styledIcon = on ? theme.fg('success', icon) : theme.fg('dim', icon);
     if (!showCapLabelText) return styledIcon;
     const styledLabel = on ? theme.fg('success', label) : theme.fg('dim', label);
-    return `${styledLabel} ${styledIcon}`;
+    return `${styledIcon}${styledLabel}`;
   };
   const capIcons = [
-    capLabel('◉', current.vision, 'vision'),
-    capLabel('◆', current.reasoning, 'thinking'),
-    capLabel('⏵', current.tools, 'tools'),
+    cap('◉', current.vision, ' vision'),
+    cap('◆', current.reasoning, ' thinking'),
+    cap('⏵', current.tools, ' tools'),
   ].join(' ');
 
   // Stats: parameter size first, then context window
