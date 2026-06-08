@@ -38,12 +38,15 @@ export const registerCommands = (
     { name: 'location', desc: 'Toggle location labels (cloud/QAT/embed) in the footer' },
     { name: 'debug', desc: 'Toggle debug logging' },
     { name: 'reload', desc: 'Reload configuration' },
-    { name: 'init', desc: 'Create default config file' },
+    { name: 'init', desc: 'Create or update config with current defaults' },
     { name: 'help', desc: 'Show help' },
   ];
 
+  /** Public subcommands shown in autocomplete. Hides 'card' (use ctrl+i instead). */
+  const PUBLIC_SUBCOMMANDS = SUBCOMMAND_DETAILS.filter(s => s.name !== 'card');
+
   const getSubcommandCompletions = (prefix: string): AutocompleteItem[] | null => {
-    const items = SUBCOMMAND_DETAILS.filter((s) => s.name.startsWith(prefix)).map((s) => ({
+    const items = PUBLIC_SUBCOMMANDS.filter((s) => s.name.startsWith(prefix)).map((s) => ({
       value: s.name, label: s.name, description: s.desc,
     }));
     return items.length > 0 ? items : null;
