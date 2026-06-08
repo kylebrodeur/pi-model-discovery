@@ -23,6 +23,7 @@ export const registerCommands = (
     persistLastSync: (lastSync: ModelDiscoveryState['lastSync']) => void;
     setShowFooterStatus: (on: boolean) => void;
     setShowCapLabelText: (on: boolean) => void;
+    setShowLocationLabels: (on: boolean) => void;
     refreshStatus: () => void;
   },
 ) => {
@@ -32,7 +33,9 @@ export const registerCommands = (
     { name: 'info', desc: 'Show details for a specific model' },
     { name: 'card', desc: 'Open the model card popup for the current model' },
     { name: 'footer', desc: 'Toggle the footer status indicator' },
-    { name: 'labels', desc: 'Toggle capability labels (vision/thinking/tools) in the footer' },
+    { name: 'labels', desc: 'Toggle all labels in the footer (cap + location) at once' },
+    { name: 'caps', desc: 'Toggle capability labels (vision/thinking/tools) in the footer' },
+    { name: 'location', desc: 'Toggle location labels (cloud/QAT/embed) in the footer' },
     { name: 'debug', desc: 'Toggle debug logging' },
     { name: 'reload', desc: 'Reload configuration' },
     { name: 'init', desc: 'Create default config file' },
@@ -83,6 +86,7 @@ export const registerCommands = (
       `Cleanup stale: ${ollamaCfg?.cleanupStale ? 'yes' : 'no'}`,
       `Footer status: ${state.currentConfig.showFooterStatus !== false ? 'on' : 'off'}`,
       `Cap labels: ${state.currentConfig.showCapLabelText === true ? 'on' : 'off'}`,
+      `Location labels: ${state.currentConfig.showLocationLabels === true ? 'on' : 'off'}`,
       `Debug: ${state.debugEnabled ? 'on' : 'off'}`,
       ``,
       `Providers:`,
@@ -205,8 +209,33 @@ export const registerCommands = (
     else if (cmd === 'off') next = false;
     else next = !current;
     actions.setShowCapLabelText(next);
+    actions.setShowLocationLabels(next);
+    actions.refreshStatus();
+    ctx.ui.notify(`Labels: ${next ? 'on' : 'off'}.`, 'info');
+  };
+
+  const handleCaps = async (args: string[], ctx: ExtensionContext) => {
+    const cmd = args[0]?.toLowerCase();
+    const current = state.currentConfig.showCapLabelText === true;
+    let next: boolean;
+    if (cmd === 'on') next = true;
+    else if (cmd === 'off') next = false;
+    else next = !current;
+    actions.setShowCapLabelText(next);
     actions.refreshStatus();
     ctx.ui.notify(`Cap labels: ${next ? 'on' : 'off'}.`, 'info');
+  };
+
+  const handleLocation = async (args: string[], ctx: ExtensionContext) => {
+    const cmd = args[0]?.toLowerCase();
+    const current = state.currentConfig.showLocationLabels === true;
+    let next: boolean;
+    if (cmd === 'on') next = true;
+    else if (cmd === 'off') next = false;
+    else next = !current;
+    actions.setShowLocationLabels(next);
+    actions.refreshStatus();
+    ctx.ui.notify(`Location labels: ${next ? 'on' : 'off'}.`, 'info');
   };
 
   const handleInit = async (args: string[], ctx: ExtensionContext) => {
@@ -247,7 +276,7 @@ export const registerCommands = (
         }));
         return items.length > 0 ? items : null;
       }
-      if (subcommand === 'footer' || subcommand === 'labels') {
+      if (subcommand === 'footer' || subcommand === 'labels' || subcommand === 'caps' || subcommand === 'location') {
         const items = ['on', 'off', 'toggle'].filter((v) => v.startsWith(subArgs[0] ?? '')).map((v) => ({
           value: `${subcommand} ${v}`, label: v,
         }));
@@ -271,6 +300,8 @@ export const registerCommands = (
         case 'card': await handleCard(subArgs, ctx); break;
         case 'footer': await handleFooter(subArgs, ctx); break;
         case 'labels': await handleLabels(subArgs, ctx); break;
+        case 'caps': await handleCaps(subArgs, ctx); break;
+        case 'location': await handleLocation(subArgs, ctx); break;
         case 'debug': await handleDebug(subArgs, ctx); break;
         case 'reload': await handleReload(subArgs, ctx); break;
         case 'init': await handleInit(subArgs, ctx); break;
@@ -283,7 +314,9 @@ export const registerCommands = (
              '  info [model]       Show details for a model (defaults to current).',
              '  card               Open the model card popup for the current model.',
              '  footer on/off      Toggle the footer status indicator.',
-             '  labels on/off      Toggle capability labels (vision/thinking/tools) in the footer.',
+             '  labels on/off      Toggle all labels (cap + location) at once.',
+             '  caps on/off        Toggle capability labels (vision/thinking/tools).',
+             '  location on/off    Toggle location labels (cloud/QAT/embed).',
              '  debug on/off       Toggle debug logging.',
              '  reload             Reload configuration.',
              '  init [--force]     Create or update config with current defaults. Use --force to reset.',

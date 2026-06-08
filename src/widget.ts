@@ -55,23 +55,35 @@ const relativeTime = (iso: string): string => {
 };
 
 /** Single-line footer status. Only shows what pi doesn't already display. */
-export const buildStatus = (theme: any, data: StatusData, showCapLabelText: boolean = false): string => {
+export const buildStatus = (theme: any, data: StatusData, showCapLabelText: boolean = false, showLocationLabels: boolean = false): string => {
   const { current } = data;
   if (!current) return '';
 
   // Location: cloud OR local disk size (mutually exclusive markers)
-  // All use single-width unicode glyphs so spacing stays consistent
+  // Optionally with text labels: "☁ cloud" or just "☁"
+  const locLabel = (icon: string, label: string, dimColor: 'muted' | 'dim' = 'muted'): string => {
+    const styledIcon = theme.fg('accent', icon);
+    if (!showLocationLabels) return styledIcon;
+    return `${styledIcon}${theme.fg(dimColor, ' ' + label)}`;
+  };
   const locationParts: string[] = [];
   if (current.remote) {
-    locationParts.push(theme.fg('accent', '☁'));
+    locationParts.push(locLabel('☁', 'cloud'));
   } else if (current.size) {
+    // Disk size — always shows the size text, no label needed
     locationParts.push(theme.fg('dim', `◧:${formatSize(current.size)}`));
   }
 
   // Type: model variants like QAT or embedding
+  // Optionally with text labels
+  const typeLabel = (icon: string, label: string, on: boolean, color: 'success' | 'muted'): string => {
+    const styledIcon = theme.fg(color, icon);
+    if (!showLocationLabels) return styledIcon;
+    return `${styledIcon}${theme.fg(on ? color : 'dim', ' ' + label)}`;
+  };
   const typeParts: string[] = [];
-  if (current.qat) typeParts.push(theme.fg('success', '✦'));
-  if (current.embedding) typeParts.push(theme.fg('muted', '◇'));
+  if (current.qat) typeParts.push(typeLabel('✦', 'QAT', true, 'success'));
+  if (current.embedding) typeParts.push(typeLabel('◇', 'embed', true, 'muted'));
 
   // Capability icons: "Caps:" then icon-then-label for each
   // (label AFTER the icon, not before)
@@ -97,17 +109,19 @@ export const buildStatus = (theme: any, data: StatusData, showCapLabelText: bool
   }
 
   // Assemble:
-  //   ◈  [location]   [type]  [caps]  [stats]
-  // - ◈ prefix marks this row as a model card (visual association)
-  // - double-space after prefix
+  //   Model: [location]   [type]  [caps]  [stats]
+  // - "Model:" prefix shown only when labels are hidden (otherwise self-evident)
   // - triple-space after location (clear visual separation)
   // - double-space between caps and stats
+  // - double-space between stats items
   // "Caps:" label is only shown when cap labels are hidden (icons alone are ambiguous)
   const capSection = showCapLabelText ? capIcons : `${theme.fg('muted', 'Caps:')} ${capIcons}`;
   const locationSection = locationParts.join(' ');
   const typeSection = typeParts.join(' ');
-  const prefix = theme.fg('dim', '◈');
-  const sections: string[] = [prefix];
+  const sections: string[] = [];
+  if (!showLocationLabels && !showCapLabelText) {
+    sections.push(theme.fg('dim', 'Model:'));
+  }
   if (locationSection) {
     sections.push(locationSection + (typeSection || capSection || statParts.length ? '   ' : ''));
   }

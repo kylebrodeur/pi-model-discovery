@@ -45,6 +45,7 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
       },
       currentConfig.showFooterStatus !== false,
       currentConfig.showCapLabelText === true,
+      currentConfig.showLocationLabels === true,
     );
   };
 
@@ -61,6 +62,9 @@ const modelDiscoveryExtension = async (pi: ExtensionAPI) => {
     },
     setShowCapLabelText: (on: boolean) => {
       currentConfig = { ...currentConfig, showCapLabelText: on };
+    },
+    setShowLocationLabels: (on: boolean) => {
+      currentConfig = { ...currentConfig, showLocationLabels: on };
     },
     updateStatus: (_ctx: ExtensionContext) => refreshStatus(),
     refreshStatus,

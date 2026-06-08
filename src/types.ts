@@ -18,6 +18,8 @@ export interface ModelDiscoveryConfig {
   showFooterStatus?: boolean;
   /** Show the capability labels (vision/thinking/tools) next to their icons. Default: false. */
   showCapLabelText?: boolean;
+  /** Show the location/type labels (cloud/QAT/embed) next to their icons. Default: false. */
+  showLocationLabels?: boolean;
   providers?: ProviderConfigs;
 }
 
